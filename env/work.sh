@@ -14,6 +14,8 @@
 
 alias mis='cd ~/work/mis'
 alias jp='cd ~/work/jp'
+alias dotfiles='cd ~/work/jp/.dotfiles'
+alias cnvim='cd ~/work/jp/.dotfiles/.config/nvim'
 
 ###############################################################################################
 #                                                                                             #
