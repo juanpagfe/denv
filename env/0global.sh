@@ -110,7 +110,7 @@ function reload_scripts() {
 }
 
 
-function reload_terminal() {
+function rt() {
   exec zsh -l
 }
 

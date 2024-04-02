@@ -17,7 +17,7 @@ fi
 if [ ! -d ~/.config ]; then
     mkdir ~/.config
 fi
-cp -rf .config/* ~/.config
+cp -r .config/* ~/.config
 
 
 #Merge environment files
