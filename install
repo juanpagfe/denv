@@ -1,5 +1,15 @@
 #!/bin/zsh
 
+unameOut="$(uname -s)"
+case "${unameOut}" in
+    Linux*)     machine=Linux;;
+    Darwin*)    machine=Mac;;
+    CYGWIN*)    machine=Cygwin;;
+    MINGW*)     machine=MinGw;;
+    MSYS_NT*)   machine=Git;;
+    *)          machine="UNKNOWN:${unameOut}"
+esac
+
 #Install dependencies
 if  command -v yum >/dev/null; then
     sudo yum -y install rsync git ripgrep
@@ -10,21 +20,28 @@ if command -v apt-get >/dev/null; then
 fi
 
 if command -v brew >/dev/null; then
-    brew install rsync xclip ffmpeg ripgrep 
+    brew install rsync xclip ffmpeg ripgrep tmux aerospace
 fi
 
 #Configure
+
 if [ ! -d ~/.config ]; then
     mkdir ~/.config
 fi
-cp -r .config/* ~/.config
+if [ "$machine" = "Mac" ]; then
+    cp -r mac/.config/* ~/.config
+fi
+if [ "$machine" = "Linux" ]; then
+    cp -r linux/.config/* ~/.config
+fi
+cp -r common/.config/* ~/.config
 
 
 #Copy bin
 if [ ! -d ~/.local ]; then
     mkdir ~/.local
 fi
-cp -r .local/bin/* ~/.local/bin
+cp -r common/.local/bin/* ~/.local/bin
 
 #Merge environment files
 if [ ! -f envrc ]; then
