@@ -1,0 +1,17 @@
+#!/bin/bash
+
+if [[ $# -eq 1 ]]; then
+    selected=$1
+else
+    selected=$(find ~/work/jp ~/work/cecropia ~/work/mis ~/ ~/work -mindepth 1 -maxdepth 1 -type d | fzf)
+fi
+
+if [[ -z $selected ]]; then
+    exit 0
+fi
+
+selected_name=$(basename "$selected" | tr . _)
+tmux_running=$(pgrep tmux)
+
+tmux neww -c $selected -n $selected_name
+tmux swap-window -s $selected_name -t -1
