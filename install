@@ -6,7 +6,7 @@ if  command -v yum >/dev/null; then
 fi
 
 if command -v apt-get >/dev/null; then
-    sudo apt-get install rsync avahi-utils dnsutils net-tools ripgrep
+    sudo apt-get install rsync avahi-utils dnsutils net-tools ripgrep fzf
 fi
 
 if command -v brew >/dev/null; then
@@ -19,6 +19,12 @@ if [ ! -d ~/.config ]; then
 fi
 cp -r .config/* ~/.config
 
+
+#Copy bin
+if [ ! -d ~/.local ]; then
+    mkdir ~/.local
+fi
+cp -r .local/bin/* ~/.local/bin
 
 #Merge environment files
 if [ ! -f envrc ]; then

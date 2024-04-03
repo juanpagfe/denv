@@ -15,6 +15,7 @@ NC='\033[0m'
 export GOPATH=$HOME/Develop/go
 export PATH=$PATH:/usr/local/go/bin:$GOPATH/bin
 export HOME_PATH_1000=$(eval echo ~$USER)
+export PATH=$PATH:$HOME_PATH_1000/.local/bin
 
 unameOut="$(uname -s)"
 case "${unameOut}" in
@@ -24,6 +25,7 @@ case "${unameOut}" in
     MINGW*)     export MACHINE=MinGw;;
     *)          export MACHINE="UNKNOWN:${unameOut}"
 esac
+
 
 ###############################################################################################
 #                                                                                             #
@@ -232,6 +234,27 @@ function compress() {
     return
     ;;
   esac
+}
+
+
+#Setup home xrandr environment if i3 is set
+function sethome() {
+    if pgrep -x "i3" > /dev/null
+    then
+        xrandr --output eDP-1 --mode 1920x1200 --pos 1920x0 --rotate normal --output HDMI-1 --primary --mode 1920x1080 --pos 0x60 --rotate normal --output DP-1 --off --output DP-2 --off
+    else
+        echo "i3 is not running"
+    fi
+}
+
+#Setup alone xrandr environment if i3 is set
+function setalone() {
+    if pgrep -x "i3" > /dev/null
+    then
+        xrandr --output eDP-1 --primary --mode 1920x1200 --pos 0x0 --rotate normal --output HDMI-1 --off --output DP-1 --off --output DP-2 --off
+    else
+        echo "i3 is not running"
+    fi
 }
 
 # Cats environment files
