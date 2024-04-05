@@ -16,6 +16,7 @@ export GOPATH=$HOME/Develop/go
 export PATH=$PATH:/usr/local/go/bin:$GOPATH/bin
 export HOME_PATH_1000=$(eval echo ~$USER)
 export PATH=$PATH:$HOME_PATH_1000/.local/bin
+export PATH="$PATH:/opt/nvim-linux64/bin"
 
 unameOut="$(uname -s)"
 case "${unameOut}" in

@@ -17,6 +17,10 @@ fi
 
 if command -v apt-get >/dev/null; then
     sudo apt-get install rsync avahi-utils dnsutils net-tools ripgrep fzf
+    curl -LO https://github.com/neovim/neovim/releases/latest/download/nvim-linux64.tar.gz
+    sudo rm -rf /opt/nvim
+    sudo tar -C /opt -xzf nvim-linux64.tar.gz
+    rm nvim-linux64.tar.gz
 fi
 
 if command -v brew >/dev/null; then
