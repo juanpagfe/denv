@@ -1,11 +1,3 @@
-
-function ColorIt(color)
-	color = color or "tokyonight"
-	vim.cmd.colorscheme(color)
-	--vim.api.nvim_set_hl(0, "Normal", { bg = "none" })
-	--vim.api.nvim_set_hl(0, "NormalFloat", { bg = "none" })
-end
-
 require("tokyonight").setup({
     -- your configuration comes here
     -- or leave it empty to use the default settings
@@ -22,10 +14,5 @@ require("tokyonight").setup({
         floats = "dark", -- style for floating windows
     },
 })
-require('rose-pine').setup({
-    disable_background = true,
-})
 
-vim.cmd("colorscheme rose-pine")
-
-ColorIt()
+vim.cmd("colorscheme tokyonight")

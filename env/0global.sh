@@ -115,6 +115,13 @@ function reload_scripts() {
   source /etc/envrc 
 }
 
+function dfinstall ()
+{
+    cd ~/work/jp/.dotfiles
+    ./install
+    cd -
+}
+
 
 function rt() {
   exec zsh -l
