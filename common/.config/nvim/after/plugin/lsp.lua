@@ -7,6 +7,14 @@ require("fidget").setup({})
 require("mason-lspconfig").setup({
   ensure_installed = { "lua_ls", "solargraph", "tsserver" }
 })
+require("mason-lspconfig").setup_handlers {
+    -- The first entry (without a key) will be the default handler
+    -- and will be called for each installed server that doesn't have
+    -- a dedicated handler.
+    function (server_name) -- default handler (optional)
+        require("lspconfig")[server_name].setup {}
+    end,
+}
 
 local lspconfig = require('lspconfig')
 
@@ -34,15 +42,15 @@ require("lspconfig").lua_ls.setup {
   }
 }
 
-require("lspconfig").solargraph.setup({})
-require("lspconfig").tsserver.setup({})
-require("lspconfig").gopls.setup({})
-require("lspconfig").tailwindcss.setup({})
-require("lspconfig").html.setup({})
-require("lspconfig").psalm.setup({})
-require("lspconfig").csharp_ls.setup({})
-require("lspconfig").pylyzer.setup({})
-require("lspconfig").pyright.setup({})
+--require("lspconfig").solargraph.setup({})
+--require("lspconfig").tsserver.setup({})
+--require("lspconfig").gopls.setup({})
+--require("lspconfig").tailwindcss.setup({})
+--require("lspconfig").html.setup({})
+--require("lspconfig").psalm.setup({})
+--require("lspconfig").csharp_ls.setup({})
+--require("lspconfig").pylyzer.setup({})
+--require("lspconfig").pyright.setup({})
 
 vim.api.nvim_create_autocmd('LspAttach', {
   group = vim.api.nvim_create_augroup('UserLspConfig', {}),
