@@ -38,6 +38,11 @@ require("lspconfig").solargraph.setup({})
 require("lspconfig").tsserver.setup({})
 require("lspconfig").gopls.setup({})
 require("lspconfig").tailwindcss.setup({})
+require("lspconfig").html.setup({})
+require("lspconfig").psalm.setup({})
+require("lspconfig").csharp_ls.setup({})
+require("lspconfig").pylyzer.setup({})
+require("lspconfig").pyright.setup({})
 
 vim.api.nvim_create_autocmd('LspAttach', {
   group = vim.api.nvim_create_augroup('UserLspConfig', {}),
