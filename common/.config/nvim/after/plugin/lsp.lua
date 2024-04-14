@@ -1,32 +1,47 @@
-require("mason").setup()
-require("fidget").setup({})
+local mason = require("mason");
+local fidget = require("fidget");
+local masonlsp = require("mason-lspconfig");
+local lspconfig = require("lspconfig");
+local lsp_defaults = lspconfig.util.default_config;
+local cmpnvimlsp = require("cmp_nvim_lsp");
 
 
+mason.setup()
 
 
-require("mason-lspconfig").setup({
+fidget.setup({})
+
+
+masonlsp.setup({
   ensure_installed = { "lua_ls", "solargraph", "tsserver" }
 })
-require("mason-lspconfig").setup_handlers {
-    -- The first entry (without a key) will be the default handler
-    -- and will be called for each installed server that doesn't have
-    -- a dedicated handler.
-    function (server_name) -- default handler (optional)
-        require("lspconfig")[server_name].setup {}
+masonlsp.setup_handlers {
+    function (server_name)
+        lspconfig[server_name].setup {}
     end,
 }
 
-local lspconfig = require('lspconfig')
-
-local lsp_defaults = lspconfig.util.default_config
 
 lsp_defaults.capabilities = vim.tbl_deep_extend(
   'force',
   lsp_defaults.capabilities,
-  require('cmp_nvim_lsp').default_capabilities()
+  cmpnvimlsp.default_capabilities()
 )
 
-require("lspconfig").lua_ls.setup {
+
+lspconfig.rust_analyzer.setup({
+    settings = {
+        ["rust-analyzer"] = {
+            server = {
+                path = "~/.cargo/bin/rust-analyzer"
+            };
+            cargo = {
+                allFeatures = true
+            }
+        }
+    }
+})
+lspconfig.lua_ls.setup {
   settings = {
     Lua = {
       diagnostics = {
@@ -42,15 +57,10 @@ require("lspconfig").lua_ls.setup {
   }
 }
 
---require("lspconfig").solargraph.setup({})
---require("lspconfig").tsserver.setup({})
---require("lspconfig").gopls.setup({})
---require("lspconfig").tailwindcss.setup({})
---require("lspconfig").html.setup({})
---require("lspconfig").psalm.setup({})
---require("lspconfig").csharp_ls.setup({})
---require("lspconfig").pylyzer.setup({})
---require("lspconfig").pyright.setup({})
+vim.keymap.set('n', '<space>e', vim.diagnostic.open_float)
+vim.keymap.set('n', '[d', vim.diagnostic.goto_prev)
+vim.keymap.set('n', ']d', vim.diagnostic.goto_next)
+vim.keymap.set('n', '<space>q', vim.diagnostic.setloclist)
 
 vim.api.nvim_create_autocmd('LspAttach', {
   group = vim.api.nvim_create_augroup('UserLspConfig', {}),

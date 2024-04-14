@@ -1,3 +1,18 @@
+
+
+vim.api.nvim_create_user_command('Light',function()
+    vim.opt.background="light"
+    vim.cmd("colorscheme tokyonight-day")
+    vim.cmd("hi Normal guifg=#0d2573 guibg=#fffff7 ctermfg=19 ctermbg=230");
+end,{})
+
+vim.api.nvim_create_user_command('Dark',function()
+    vim.opt.background="dark"
+    vim.cmd("colorscheme tokyonight")
+    vim.cmd("hi Normal guifg=#add4fb guibg=#171421 ctermfg=19 ctermbg=230");
+end,{})
+
+
 require("tokyonight").setup({
     -- your configuration comes here
     -- or leave it empty to use the default settings
@@ -9,10 +24,7 @@ require("tokyonight").setup({
         -- Value is any valid attr-list value for `:help nvim_set_hl`
         comments = { italic = false },
         keywords = { italic = false },
-        -- Background styles. Can be "dark", "transparent" or "normal"
-        sidebars = "dark", -- style for sidebars, see below
-        floats = "dark", -- style for floating windows
     },
 })
 
-vim.cmd("colorscheme tokyonight")
+vim.cmd("Dark");
