@@ -11,10 +11,6 @@ case "${unameOut}" in
 esac
 
 #Install dependencies
-if  command -v yum >/dev/null; then
-    sudo yum -y install rsync git ripgrep
-fi
-
 if command -v apt-get >/dev/null; then
     sudo apt-get install rsync avahi-utils dnsutils net-tools ripgrep fzf maim \
         xdotool xclip
