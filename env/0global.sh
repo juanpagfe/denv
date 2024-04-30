@@ -92,6 +92,8 @@ alias halt='sudo /sbin/halt'
 alias shutdown='sudo /sbin/shutdown'
 
 alias vim='nvim'
+tmux=$(which tmux)
+alias tmux="$tmux -2"
 
 ###############################################################################################
 #                                                                                             #
