@@ -17,6 +17,13 @@ alias jp='cd ~/work/jp'
 alias dotfiles='cd ~/work/jp/.dotfiles'
 alias cnvim='cd ~/work/jp/.dotfiles/.config/nvim'
 
+alias jrnltdy='jrnl -on today --edit'
+alias jrnlon='jrnl --edit -on'
+
+
+export DYNAPP_SERVER='165.227.221.238'
+export GANAD_SERVER='64.225.48.51'
+
 ###############################################################################################
 #                                                                                             #
 #                                       GLOBAL FUNCTIONS                                      #
