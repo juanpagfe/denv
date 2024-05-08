@@ -21,8 +21,8 @@ alias jrnltdy='jrnl -on today --edit'
 alias jrnlon='jrnl --edit -on'
 
 
-export DYNAPP_SERVER='165.227.221.238'
-export GANAD_SERVER='64.225.48.51'
+export DYNAPP_SERVER="165.227.221.238"
+export GANAD_SERVER="64.225.48.51"
 
 ###############################################################################################
 #                                                                                             #
