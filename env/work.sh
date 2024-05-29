@@ -41,7 +41,7 @@ function cardiacqa_new_migration() {
 } 
 
 function cardiacqa_update_migrations() {
-    dotnet ef database update --startup-project $CARDIACQA_DIR/CardiacQA.App/CardiacQA.App.csproj --project $CARDIACQA_DIR/.DataAccess/CardiacQA.DataAccess.csproj --context CardiacContext
+    dotnet ef database update --startup-project $CARDIACQA_DIR/CardiacQA.App/CardiacQA.App.csproj --project $CARDIACQA_DIR/CardiacQA.DataAccess/CardiacQA.DataAccess.csproj --context CardiacContext
 } 
 
 function cardiacqa_run() {
