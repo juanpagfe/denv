@@ -37,11 +37,11 @@ function cardiacqa_new_migration() {
         echo -e "You must give the name of the new migration"
         return 1
     fi
-    dotnet ef migrations add $1 --startup-project $CARDIACQA_DIR/CardiacQA.App/CardiacQA.App.csproj --project $QAADMIN_DIR/QAAdmin.DataAccess/CardiacQA.DataAccess.csproj --context CardiacContext
+    dotnet ef migrations add $1 --startup-project $CARDIACQA_DIR/CardiacQA.App/CardiacQA.App.csproj --project $CARDIACQA_DIR/CardiacQA.DataAccess/CardiacQA.DataAccess.csproj --context CardiacContext
 } 
 
 function cardiacqa_update_migrations() {
-    dotnet ef database update --startup-project $CARDIACQA_DIR/CardiacQA.App/CardiacQA.App.csproj --project $QAADMIN_DIR/QAAdmin.DataAccess/CardiacQA.DataAccess.csproj --context CardiacContext
+    dotnet ef database update --startup-project $CARDIACQA_DIR/CardiacQA.App/CardiacQA.App.csproj --project $CARDIACQA_DIR/.DataAccess/CardiacQA.DataAccess.csproj --context CardiacContext
 } 
 
 function cardiacqa_run() {
