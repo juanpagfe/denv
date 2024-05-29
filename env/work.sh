@@ -20,9 +20,10 @@ alias cnvim='cd ~/work/jp/.dotfiles/.config/nvim'
 alias jrnltdy='jrnl -on today --edit'
 alias jrnlon='jrnl --edit -on'
 
-
 export DYNAPP_SERVER="165.227.221.238"
 export GANAD_SERVER="64.225.48.51"
+export QAADMIN_DIR="/Users/juanpablogarcia/work/mis/qaadmin-be"
+
 
 ###############################################################################################
 #                                                                                             #
@@ -30,3 +31,18 @@ export GANAD_SERVER="64.225.48.51"
 #                                                                                             #
 ###############################################################################################
 
+function qaadmin_new_migration() {
+    if [ -z "$1" ]; then
+        echo -e "You must give the name of the new migration"
+        return 1
+    fi
+    dotnet ef migrations add $1 --startup-project $QAADMIN_DIR/QAAdmin.API/QAAdmin.API.csproj --project $QAADMIN_DIR/QAAdmin.DataAccess/QAAdmin.DataAccess.csproj --context ApplicationDbContext
+} 
+
+function qaadmin_update_migrations() {
+    dotnet ef database update --startup-project $QAADMIN_DIR/QAAdmin.API/QAAdmin.API.csproj --project $QAADMIN_DIR/QAAdmin.DataAccess/QAAdmin.DataAccess.csproj --context ApplicationDbContext
+} 
+
+function qaadmin_run() {
+    dotnet run --project $QAADMIN_DIR/QAAdmin.API/QAAdmin.API.csproj
+} 

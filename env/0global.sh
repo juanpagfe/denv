@@ -116,8 +116,7 @@ function reload_scripts() {
   source /etc/envrc 
 }
 
-function dfinstall ()
-{
+function dfinstall () {
     cd ~/work/jp/.dotfiles
     ./install
     cd -
