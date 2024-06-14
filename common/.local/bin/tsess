@@ -3,7 +3,7 @@
 if [[ $# -eq 1 ]]; then
     selected=$1
 else
-    selected=$(find ~/work/jp ~/work/jp/.dotfiles/common/.config ~/work/cecropia ~/work/mis ~/ ~/work -mindepth 1 -maxdepth 1 -type d | fzf)
+    selected=$(find ~/work/jp ~/work/jp/.dotfiles/common/.config ~/work/cecropia ~/work/mis ~/work/wti ~/ ~/work -mindepth 1 -maxdepth 1 -type d | fzf)
 fi
 
 if [[ -z $selected ]]; then
