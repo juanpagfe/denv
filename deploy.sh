@@ -1,16 +1,28 @@
 #!/bin/zsh
 
 #Configure
+unameOut="$(uname -s)"
+case "${unameOut}" in
+    Linux*)     machine=Linux;;
+    Darwin*)    machine=Mac;;
+    CYGWIN*)    machine=Cygwin;;
+    MINGW*)     machine=MinGw;;
+    MSYS_NT*)   machine=Git;;
+    *)          machine="UNKNOWN:${unameOut}"
+esac
 
 if [ ! -d ~/.config ]; then
     mkdir ~/.config
 fi
 if [ "$machine" = "Mac" ]; then
+    echo "Installing for Mac..."
     cp -rf mac/.config/* ~/.config
 fi
 if [ "$machine" = "Linux" ]; then
+    echo "Installing for Linux..."
     cp -rf linux/.config/* ~/.config
 fi
+echo "Installing common..."
 cp -rf common/.config/* ~/.config
 
 

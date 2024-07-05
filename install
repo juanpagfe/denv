@@ -1,15 +1,5 @@
 #!/bin/zsh
 
-unameOut="$(uname -s)"
-case "${unameOut}" in
-    Linux*)     machine=Linux;;
-    Darwin*)    machine=Mac;;
-    CYGWIN*)    machine=Cygwin;;
-    MINGW*)     machine=MinGw;;
-    MSYS_NT*)   machine=Git;;
-    *)          machine="UNKNOWN:${unameOut}"
-esac
-
 #Install dependencies
 if command -v apt-get >/dev/null; then
     sudo apt-get install rsync avahi-utils dnsutils net-tools ripgrep fzf maim \
