@@ -6,12 +6,12 @@ if [ ! -d ~/.config ]; then
     mkdir ~/.config
 fi
 if [ "$machine" = "Mac" ]; then
-    cp -r mac/.config/* ~/.config
+    cp -rf mac/.config/* ~/.config
 fi
 if [ "$machine" = "Linux" ]; then
-    cp -r linux/.config/* ~/.config
+    cp -rf linux/.config/* ~/.config
 fi
-cp -r common/.config/* ~/.config
+cp -rf common/.config/* ~/.config
 
 
 #Copy bin
