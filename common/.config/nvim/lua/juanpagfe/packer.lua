@@ -38,4 +38,5 @@ return require('packer').startup(function(use)
         "saadparwaiz1/cmp_luasnip",
         "rafamadriz/friendly-snippets"
     }
+    use { "kylechui/nvim-surround", tag = "*" }
 end)
