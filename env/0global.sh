@@ -19,6 +19,7 @@ export PATH=$PATH:$HOME_PATH_1000/.local/bin
 export PATH="$PATH:/opt/nvim-linux64/bin"
 export PATH=$PATH:/usr/local/go/bin
 export PATH=$PATH:/home/jpgarcia/.cargo/bin
+export XDG_DATA_DIRS="/var/lib/flatpak/exports/share:/home/jpgarcia/.local/share/flatpak/exports/share:$XDG_DATA_DIRS"
 
 unameOut="$(uname -s)"
 case "${unameOut}" in

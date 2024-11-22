@@ -15,6 +15,9 @@ set $mod Mod4
 # is used in the bar {} block below.
 font pango:monospace 12px
 
+
+exec_always --no-startup-id setalone
+
 # GET DEM BORDERS OUT OF HEREc:w
 #
 # Thanks Childz
@@ -230,7 +233,6 @@ bar {
 # ------------------------------------------
 # CUSTOM KEYS START
 # ------------------------------------------
-exec --no-startup-id nm-applet
 
 # FKeys
 # Pulse Audio controls
