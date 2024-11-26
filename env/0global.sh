@@ -20,6 +20,7 @@ export PATH="$PATH:/opt/nvim-linux64/bin"
 export PATH=$PATH:/usr/local/go/bin
 export PATH=$PATH:/home/jpgarcia/.cargo/bin
 export XDG_DATA_DIRS="/var/lib/flatpak/exports/share:/home/jpgarcia/.local/share/flatpak/exports/share:$XDG_DATA_DIRS"
+export GNUCASH_PATH=~/OneDrive/2Areas/Accounting/gnucash
 
 unameOut="$(uname -s)"
 case "${unameOut}" in
@@ -344,3 +345,12 @@ function updatenv(){
 
   . /etc/envrc
 }
+
+#Backup for gnucash
+function backup_gnucash() {
+    filename=$(date +'%Y%m%d%H%M%S').zip
+    cd $GNUCASH_PATH
+    zip -r $GNUCASH_PATH/../backup/$filename .
+    cd -
+}
+
