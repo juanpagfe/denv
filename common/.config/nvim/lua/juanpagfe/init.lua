@@ -47,11 +47,7 @@ autocmd({"BufWritePre"}, {
 autocmd('BufEnter', {
     group = juanpagfeGroup,        -- Group the autocmd under the 'juanpagfe' group
     callback = function()          -- Define what happens when entering a buffer
-        if vim.bo.filetype == "zig" then
-            vim.cmd.colorscheme("tokyonight-night")  -- Use 'tokyonight-night' for Zig files
-        else
-            vim.cmd.colorscheme("rose-pine-moon")   -- Use 'rose-pine-moon' for all other files
-        end
+        vim.cmd.colorscheme("tokyonight-night")
     end
 })
 

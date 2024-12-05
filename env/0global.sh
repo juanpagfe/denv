@@ -110,12 +110,12 @@ function crfile() {
   file_size=$((((wanted_size/12)+1)*12 ))
   read_size=$((file_size*3/4))
   dd if=/dev/urandom bs=$read_size count=1 | base64 > $1
-  truncate -s "$wanted_size" $1 
+  truncate -s "$wanted_size" $1
 }
 
 # Reloads environment scripts on the current session
 function reload_scripts() {
-  source /etc/envrc 
+  source /etc/envrc
 }
 
 function dfinstall () {
@@ -309,7 +309,7 @@ function uploadenv() {
     echo "You need to specify the username (eg. pi@pi0.local. It can't be root)"
     return
   fi
-  
+
   scp /etc/envrc $1:/home/$name
   ssh $1 -T <<ENDSSH
       sudo mv ~/envrc /etc/envrc
@@ -321,24 +321,24 @@ ENDSSH
 
 function updatenv(){
   ENVRC_TEXT=". /etc/envrc"
-  if [[ $(grep -L "$ENVRC_TEXT" ~/.bashrc) ]]; then   
+  if [[ $(grep -L "$ENVRC_TEXT" ~/.bashrc) ]]; then
     echo $ENVRC_TEXT | sudo tee -a ~/.bashrc
   fi
 
   if [ -f ~/.zshrc ]; then
-      if [[ $(grep -L "$ENVRC_TEXT" ~/.zshrc) ]]; then   
+      if [[ $(grep -L "$ENVRC_TEXT" ~/.zshrc) ]]; then
           echo $ENVRC_TEXT | sudo tee -a ~/.zshrc
       fi
   fi
 
   if sudo test -f /root/.bashrc; then
-    if [[ $(sudo grep -L "$ENVRC_TEXT" /root/.bashrc) ]]; then   
+    if [[ $(sudo grep -L "$ENVRC_TEXT" /root/.bashrc) ]]; then
       echo $ENVRC_TEXT | sudo tee -a /root/.bashrc
     fi
   fi
 
   if sudo test -f /root/.zshrc; then
-    if [[ $(sudo grep -L "$ENVRC_TEXT" /root/.zshrc) ]]; then   
+    if [[ $(sudo grep -L "$ENVRC_TEXT" /root/.zshrc) ]]; then
         echo $ENVRC_TEXT | sudo tee -a /root/.zshrc
     fi
   fi
@@ -351,6 +351,15 @@ function backup_gnucash() {
     filename=$(date +'%Y%m%d%H%M%S').zip
     cd $GNUCASH_PATH
     zip -r $GNUCASH_PATH/../backup/$filename .
+    cd -
+    cd $GNUCASH_PATH/../backup
+    newest_files=($(ls -t | head -n 5))
+    for file in *; do
+      if [[ ! " ${newest_files[@]} " =~ " ${file} " ]]; then
+        rm -f "$file"
+        echo "Deleted: $file"
+      fi
+    done
     cd -
 }
 
