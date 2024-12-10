@@ -10,7 +10,7 @@
 alias www='python3 -m http.server'
 
 #Prints current opened ports
-if [ $MACHINE = "Mac" ]; then
+if [ "$MACHINE" = "Mac" ]; then
   alias ports="netstat -lant | grep -E -i -w 'LISTEN|udp4|udp6'"
 else
   alias ports='netstat -tulanp'
@@ -41,7 +41,7 @@ function ip_of() {
 }
 
 #Only for linux
-if [ $MACHINE = "Linux" ]; then
+if [ "$MACHINE" = "Linux" ]; then
   #Clear IPv4 tables
   function clsiptables() {
     sudo iptables -P INPUT ACCEPT
