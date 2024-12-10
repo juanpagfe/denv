@@ -6,9 +6,6 @@
 #                                                                                             #
 ###############################################################################################
 
-#Queries public IP
-alias pubip='curl http://ipecho.net/plain; echo'
-
 #Starts an http server on the current directory (Default port: 8000)
 alias www='python3 -m http.server'
 
@@ -31,7 +28,6 @@ alias lsiptables='sudo iptables -L -n -v'
 function is_valid_ip()
 {
     local ip="$1"
-
     # ipcalc -c -4 -s "$ip"
     [[ "$ip" =~ ^(25[0-5]|2[0-4][0-9]|1[0-9]{2,2}|[0-9]{1,2})\.(25[0-5]|2[0-4][0-9]|1[0-9]{2,2}|[0-9]{1,2})\.(25[0-5]|2[0-4][0-9]|1[0-9]{2,2}|[0-9]{1,2})\.(25[0-5]|2[0-4][0-9]|1[0-9]{2,2}|[0-9]{1,2})$ ]]
 }
@@ -42,36 +38,6 @@ function ip_of() {
         result=$(avahi-browse -d local _ssh._tcp --resolve -t -p | grep $1 | awk --field-separator=";" '{print $8}')
     fi
     echo $result
-}
-
-# Prints local ip's formatted
-function ips() {
-  printf "\nLocal IP's:\n-----------\n"
-  if [[ $# -eq 0 ]]; then
-    if [ $MACHINE = "Linux" ]; then
-      NICS=($(ip addr list | awk -F': ' '/^[0-9]/ {print $2}'))
-    elif [ $MACHINE = "Mac" ]; then
-      NICS=($(ifconfig | pcregrep -M -o '^[^\t:]+(?=:([^\n]|\n\t)*status: active)'))
-    else
-      NICS=("$@")
-    fi
-  else
-    NICS=("$@")
-  fi
-
-  for nic in "${NICS[@]}"; do
-    if [ $MACHINE = "Linux" ]; then
-      ip=$(ip -4 addr show $nic | grep -oP "(?<=inet ).*(?=/)")
-    elif [ $MACHINE = "Mac" ]; then
-      ip=$(ifconfig $nic | grep -E "([0-9]{1,3}\.){3}[0-9]{1,3}" | head -1 | awk '{ print $2 }')
-    fi
-    if [[ ! -z $ip ]]; then
-      echo "$nic: $ip"
-    fi
-  done
-  printf "\nPublic IP's:\n------------\n"
-  pubip
-  printf "\n"
 }
 
 #Only for linux
@@ -91,6 +57,7 @@ if [ $MACHINE = "Linux" ]; then
     sudo ifconfig $1 $2 netmask $3
   }
 
+  # Creates a new access point
   function nap(){
     if [ -z "$1" ]; then
           echo "You need to specify a network interface in the first parameter '$1'"

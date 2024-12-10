@@ -20,17 +20,9 @@ export PATH="$PATH:/opt/nvim-linux64/bin"
 export PATH=$PATH:/usr/local/go/bin
 export PATH=$PATH:/home/jpgarcia/.cargo/bin
 export XDG_DATA_DIRS="/var/lib/flatpak/exports/share:/home/jpgarcia/.local/share/flatpak/exports/share:$XDG_DATA_DIRS"
-export GNUCASH_PATH=~/OneDrive/2Areas/Accounting/gnucash
 
-unameOut="$(uname -s)"
-case "${unameOut}" in
-    Linux*)     export MACHINE=Linux;;
-    Darwin*)    export MACHINE=Mac;;
-    CYGWIN*)    export MACHINE=Cygwin;;
-    MINGW*)     export MACHINE=MinGw;;
-    *)          export MACHINE="UNKNOWN:${unameOut}"
-esac
-
+# Bash file stored in ~/.local/bin/
+set_machine
 
 ###############################################################################################
 #                                                                                             #
@@ -113,142 +105,9 @@ function crfile() {
   truncate -s "$wanted_size" $1
 }
 
-# Reloads environment scripts on the current session
-function reload_scripts() {
-  source /etc/envrc
-}
-
-function dfinstall () {
-    cd ~/work/jp/.dotfiles
-    ./install
-    cd -
-}
-
-
 function rt() {
   exec zsh -l
 }
-
-
-# Extract any kind of know files
-function extract() {
-
-  if [[ "$#" -lt 1 ]]; then
-    echo "Usage: extract <path/file_name>.<zip|rar|bz2|gz|tar|tbz2|tgz|Z|7z|xz|ex|tar.bz2|tar.gz|tar.xz>"
-    return 1 #not enough args
-  fi
-
-  if [[ ! -e "$1" ]]; then
-    echo -e "File does not exist!"
-    return 2 # File not found
-  fi
-
-  DESTDIR="."
-
-  filename=$(basename "$1")
-
-  case "${filename##*.}" in
-  tar)
-    echo -e "Extracting $1 to $DESTDIR: (uncompressed tar)"
-    tar xvf "$1" -C "$DESTDIR"
-    ;;
-  gz)
-    echo -e "Extracting $1 to $DESTDIR: (gip compressed tar)"
-    tar xvfz "$1" -C "$DESTDIR"
-    ;;
-  tgz)
-    echo -e "Extracting $1 to $DESTDIR: (gip compressed tar)"
-    tar xvfz "$1" -C "$DESTDIR"
-    ;;
-  xz)
-    echo -e "Extracting  $1 to $DESTDIR: (gip compressed tar)"
-    tar xvf -J "$1" -C "$DESTDIR"
-    ;;
-  bz2)
-    echo -e "Extracting $1 to $DESTDIR: (bzip compressed tar)"
-    tar xvfj "$1" -C "$DESTDIR"
-    ;;
-  tbz2)
-    echo -e "Extracting $1 to $DESTDIR: (tbz2 compressed tar)"
-    tar xvjf "$1" -C "$DESTDIR"
-    ;;
-  zip)
-    echo -e "Extracting $1 to $DESTDIR: (zipp compressed file)"
-    unzip "$1" -d "$DESTDIR"
-    ;;
-  lzma)
-    echo -e "Extracting $1 : (lzma compressed file)"
-    unlzma "$1"
-    ;;
-  rar)
-    echo -e "Extracting $1 to $DESTDIR: (rar compressed file)"
-    unrar x "$1" "$DESTDIR"
-    ;;
-  7z)
-    echo -e "Extracting $1 to $DESTDIR: (7zip compressed file)"
-    7za e "$1" -o "$DESTDIR"
-    ;;
-  xz)
-    echo -e "Extracting $1 : (xz compressed file)"
-    unxz "$1"
-    ;;
-  exe)
-    cabextract "$1"
-    ;;
-  *)
-    echo -e "Unknown archieve format!"
-    return
-    ;;
-  esac
-}
-
-#Compress file. Only tar and zip files supported
-function compress() {
-  if [[ "$#" -lt 1 ]]; then
-    echo "Usage: compress <path/file_name>.<zip|rar|bz2|gz|tar|tbz2|tgz|Z|7z|xz|ex|tar.bz2|tar.gz|tar.xz> <path/file_names>"
-    return 1 #not enough args
-  fi
-
-  filename=$(basename "$1")
-  arr=("$@")
-  files="${arr[@]:1}"
-
-  case "${filename##*.}" in
-  zip)
-    echo -e "Compressing $files to $1: (${filename##*.} file)"
-    zip -r $1 $files
-    ;;
-  tar)
-    echo -e "Extracting $1 to $DESTDIR: (${filename##*.} tar)"
-    tar -cavvf $1 $files
-    ;;
-  gz)
-    echo -e "Extracting $1 to $DESTDIR: (${filename##*.} compressed tar)"
-    tar -cavvf $1 $files
-    ;;
-  tgz)
-    echo -e "Extracting $1 to $DESTDIR: (${filename##*.} compressed tar)"
-    tar -cavvf $1 $files
-    ;;
-  xz)
-    echo -e "Extracting  $1 to $DESTDIR: (${filename##*.} compressed tar)"
-    tar -cavvf $1 $files
-    ;;
-  bz2)
-    echo -e "Extracting $1 to $DESTDIR: (${filename##*.} compressed tar)"
-    tar -cavvf $1 $files
-    ;;
-  tbz2)
-    echo -e "Extracting $1 to $DESTDIR: (${filename##*.} compressed tar)"
-    tar -cavvf $1 $files
-    ;;
-  *)
-    echo -e "Unknown archieve format!"
-    return
-    ;;
-  esac
-}
-
 
 #Setup home xrandr environment if i3 is set
 function sethome() {
@@ -279,8 +138,13 @@ function catenv() {
     if [ -z "$acat" ]; then
       fcat=$(declare -f $1)
       if [ -z "$fcat" ]; then
-        echo "${GREEN}Not an alias nor a function. Regex search:${NC}"
-        cat /etc/envrc | grep $1
+        if [ -f "$HOME_PATH_1000/.local/bin/$1" ]; then
+            echo "${GREEN}Executable File${NC}"
+            cat $HOME_PATH_1000/.local/bin/$1
+        else
+            echo "${GREEN}Not an alias nor a function. Regex search:${NC}"
+            cat /etc/envrc | grep $1
+        fi
       else
         echo "${GREEN}Function${NC}"
         echo $fcat
@@ -344,22 +208,5 @@ function updatenv(){
   fi
 
   . /etc/envrc
-}
-
-#Backup for gnucash
-function backup_gnucash() {
-    filename=$(date +'%Y%m%d%H%M%S').zip
-    cd $GNUCASH_PATH
-    zip -r $GNUCASH_PATH/../backup/$filename .
-    cd -
-    cd $GNUCASH_PATH/../backup
-    newest_files=($(ls -t | head -n 5))
-    for file in *; do
-      if [[ ! " ${newest_files[@]} " =~ " ${file} " ]]; then
-        rm -f "$file"
-        echo "Deleted: $file"
-      fi
-    done
-    cd -
 }
 

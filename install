@@ -7,7 +7,7 @@ if command -v apt-get >/dev/null; then
 fi
 
 if command -v brew >/dev/null; then
-    brew install rsync xclip ffmpeg ripgrep tmux aerospace fzf
+    brew install rsync xclip ffmpeg ripgrep tmux aerospace fzf pcre
 fi
 
 ./deploy.sh

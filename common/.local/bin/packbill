@@ -1,0 +1,71 @@
+#!/bin/bash
+
+usage() {
+  echo "Usage: $0 [options]"
+  echo "Options:"
+  echo "  -h, --help            Show this help message"
+  echo "  -p, --payment <file>  Payment file"
+  echo "  -b, --bill <file>     Bill file"
+}
+
+if [ $# -eq 0 ]; then
+  echo "You have to provide arguments."
+  usage
+  exit 1
+fi
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -p|--payment)
+            if [ ! -f "$2" ]; then
+                echo "Payment must be a file."
+                usage
+                exit 1
+            fi
+            PAYMENT=$2
+            shift 2
+            ;;
+        -b|--bill)
+            if [ ! -f "$2" ]; then
+                echo "Bill must be a file"
+                usage
+                exit 1
+            fi
+            BILL=$2
+            shift 2
+            ;;
+        --)
+            shift
+            break
+            ;;
+        *)
+            echo "Invalid option: $1."
+            usage
+            exit 1
+            ;;
+    esac
+done
+
+# Get a formatted date with the format: 11Noviembre
+fdate=$(LC_TIME=es_ES.UTF-8 date "+%m%B")
+fdate=$(echo "$fdate" | awk '{print substr($0, 1, 2) toupper(substr($0, 3, 1)) substr($0, 4)}')
+
+mkdir -p /tmp/$fdate
+
+# Renames payment file
+ext1="${PAYMENT##*.}"
+cp $PAYMENT /tmp/$fdate/Pago.$ext1
+
+# Renames bill file
+ext2="${BILL##*.}"
+cp $BILL /tmp/$fdate/Factura.$ext2
+
+# Compress file
+cd /tmp/$fdate
+zip $fdate.zip ./*
+
+# Finishing up
+cd -
+cp /tmp/$fdate/$fdate.zip .
+rm -rf /tmp/$fdate
+echo "$fdate.zip created"

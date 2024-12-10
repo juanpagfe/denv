@@ -67,6 +67,9 @@ vim.keymap.set("n", "<leader>f", [[/<C-r><C-w><Left><Left><Left>]])
 -- In normal mode, makes the current file executable (if it's a script)
 vim.keymap.set("n", "<leader>x", "<cmd>!chmod +x %<CR>", { silent = true })
 
+-- In normal mode, jumps to the previous selected buffer
+vim.api.nvim_set_keymap('n', '<leader><Tab>', ":lua require('telescope.builtin').buffers { sort_lastused = true, ignore_current_buffer = true, only_cwd = true }<CR>", { noremap = true, silent = true })
+
 -- In visual mode, replaces the selected text with a substitution pattern (using the selected text as part of the command)
 vim.keymap.set('v', '<leader>p', function()
   -- Get the selected text

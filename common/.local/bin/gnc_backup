@@ -1,0 +1,22 @@
+#!/bin/bash
+
+export GNUCASH_PATH=~/OneDrive/2Areas/Accounting/gnucash
+
+# Backup gnucash current state
+filename=$(date +'%Y%m%d%H%M%S').zip
+cd $GNUCASH_PATH
+zip -r $GNUCASH_PATH/../backup/$filename .
+cd -
+cd $GNUCASH_PATH/../backup
+
+# Delete old files and only left the last 5
+newest_files=($(ls -t | head -n 5))
+for file in *; do
+    if [[ ! " ${newest_files[@]} " =~ " ${file} " ]]; then
+        rm -f "$file"
+        echo "Deleted: $file"
+    fi
+done
+
+# Returns the terminal back to the previous directory
+cd -
