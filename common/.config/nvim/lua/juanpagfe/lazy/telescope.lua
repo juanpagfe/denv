@@ -18,7 +18,7 @@ return {
     end)
     vim.keymap.set('n', '<leader>ph', builtin.git_files, {})
     vim.keymap.set('n', '<leader>ps', builtin.live_grep, {})
-    vim.keymap.set('n', '<leader>pb', builtin.buffers, {})
+    vim.api.nvim_set_keymap('n', '<leader><Tab>', ":lua require('telescope.builtin').buffers { sort_lastused = true, ignore_current_buffer = true, only_cwd = true }<CR>", { noremap = true, silent = true })
     vim.keymap.set('n', '<leader>gr', ":TelescopeGrepReplace ", { noremap = true, silent = true })
     vim.keymap.set('n', '<leader>r', function()
       builtin.lsp_references({ include_declaration = true, include_current_line = true })
