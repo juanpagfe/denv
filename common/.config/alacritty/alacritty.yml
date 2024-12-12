@@ -1,0 +1,25 @@
+# Configuration file for Alacritty
+# More info: https://github.com/alacritty/alacritty
+
+
+# Font configuration
+font:
+  size: 9.0
+
+# Key bindings
+key_bindings:
+  - { key: V,        mods: Control, action: Paste }
+  - { key: Y,        mods: Control, action: Copy }
+
+# Scrollback settings
+scrollback:
+  history: 10000
+  multiplier: 3
+
+# Mouse settings
+mouse:
+  # Enables mouse scrolling
+  enabled: true
+  hide_when_typing: true
+  selection: true
+  paste_on_middle_click: true
