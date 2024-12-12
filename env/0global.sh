@@ -24,6 +24,18 @@ export XDG_DATA_DIRS="/var/lib/flatpak/exports/share:/home/jpgarcia/.local/share
 # Bash file stored in ~/.local/bin/
 set_machine
 
+#Starts an http server on the current directory (Default port: 8000)
+alias www='python3 -m http.server'
+
+#Prints current opened ports
+if [ "$MACHINE" = "Mac" ]; then
+    alias ports="netstat -lant | grep -E -i -w 'LISTEN|udp4|udp6'"
+else
+    alias ports='netstat -tulanp'
+fi
+
+alias lsiptables='sudo iptables -L -n -v'
+
 ###############################################################################################
 #                                                                                             #
 #                                        GLOBAL ALIASES                                       #

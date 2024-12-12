@@ -1,0 +1,12 @@
+#!/bin/bash
+
+result=$(dig $1 +short)
+if [ -z "$result" ]; then
+    if [[ "$MACHINE" = "Linux" ]]; then
+        result=$(avahi-browse -d local _ssh._tcp --resolve -t -p | grep $1 | awk --field-separator=";" '{print $8}')
+    else
+        echo "Error: Dig command didn't work to retrieve the ip address"
+        exit 1
+    fi
+fi
+echo $result

@@ -1,0 +1,45 @@
+#!/bin/bash
+
+if [[ "$MACHINE" != "Linux" ]]; then
+    echo "This program only works in Linux systems"
+    exit 1
+fi
+
+is_valid_port() {
+    local port="$1"
+    if [[ ! $port =~ ^[0-9]+$ ]]; then
+        return 1
+    fi
+
+    if [[ $port -lt 0 || $port -gt 65535 ]]; then
+        return 1
+    fi
+    return 0
+}
+
+usage() {
+  echo "Usage: $0 <protocol> <port>"
+  echo "<protocol>: tcp|TCP|udp|UDP"
+  echo "<port>: 0 to 65535"
+}
+
+array=("tcp TCP udp UDP")
+
+if ! is_valid_port "$1"; then
+    echo "Error: $1 is not a valid port number."
+    exit 1
+fi
+
+if [[ ! " ${array[@]} " =~ " $proto " ]]; then
+    echo "Error: '$2' must be a valid transport protocol."
+    exit 1
+fi
+
+sudo iptables -t filter -A INPUT -p $2 -m state --state NEW -m $2 --dport $1 -j ACCEPT
+if [ $? -eq 0 ]; then
+    echo "Port $1:$2 opened."
+    exit 0
+else
+    echo "Port $1:$2 could not be opened."
+    exit 1
+fi
