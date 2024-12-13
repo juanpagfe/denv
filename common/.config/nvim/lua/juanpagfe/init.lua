@@ -78,9 +78,3 @@ autocmd('LspAttach', {
         vim.keymap.set("n", "]d", function() vim.diagnostic.goto_prev() end, opts)
     end
 })
-
--- Configure netrw (the built-in file explorer) settings:
-vim.g.netrw_browse_split = 0  -- Open directories in the current window, not in a new one
-vim.g.netrw_banner = 1        -- Disable the netrw banner (the header with version info)
-vim.g.netrw_winsize = 25      -- Set the default window size for netrw to 25% of the screen
-
