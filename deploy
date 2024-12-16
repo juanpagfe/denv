@@ -22,8 +22,10 @@ if [ "$machine" = "Linux" ]; then
     echo "Installing for Linux..."
     cp -rf linux/.config/* ~/.config
 fi
+
 echo "Installing common..."
 cp -rf common/.config/* ~/.config
+cp rc/.* ~/
 
 
 #Copy bin
