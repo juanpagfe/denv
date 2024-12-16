@@ -236,7 +236,7 @@ bar {
 
 # FKeys
 # Pulse Audio controls
-bindsym XF86AudioMute exec amixer -D pulse set Master 1+ toggle 
+bindsym XF86AudioMute exec amixer -D pulse set Master 1+ toggle
 bindsym XF86AudioLowerVolume exec amixer sset 'Master' 5%-
 bindsym XF86AudioRaiseVolume exec amixer sset 'Master' 5%+
 
@@ -267,3 +267,4 @@ bindsym Ctrl+Shift+Print exec --no-startup-id maim --select | xclip -selection c
 
 #This configures the xrandr when alone or home
 exec --no-startup-id sh -c 'xrandr --query | grep -E "HDMI.* connected" && xrandr --output eDP-1 --mode 1920x1200 --pos 1920x0 --rotate normal --output HDMI-1 --primary --mode 1920x1080 --pos 0x60 --rotate normal --output DP-1 --off --output DP-2 --off || xrandr --output eDP-1 --primary --mode 1920x1200 --pos 0x0 --rotate normal --output HDMI-1 --off --output DP-1 --off --output DP-2 --off'
+exec_always --no-startup-id feh --bg-scale ~/Pictures/background.jpg
