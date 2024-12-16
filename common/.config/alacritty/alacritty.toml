@@ -8,7 +8,7 @@ mods = "Control|Shift"
 
 [[keyboard.bindings]]
 action = "Copy"
-key = "Y"
+key = "C"
 mods = "Control|Shift"
 
 [mouse]
