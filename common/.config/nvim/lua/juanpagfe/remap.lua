@@ -1,19 +1,6 @@
 -- Opens the directory above the current buffer (using Ex command)
---vim.keymap.set("n", "<leader><Esc>", vim.cmd.Ex)
+vim.keymap.set("n", "<leader><Esc>", vim.cmd.Ex)
 --vim.api.nvim_set_keymap('n', '<leader>e', ':25Lexplore %:p:h<CR>', { noremap = true, silent = true })
-function ToggleNetrw()
-  -- Check if we're in a Netrw buffer
-  if vim.bo.filetype == "netrw" then
-    -- Close Netrw if we are already in it
-    vim.cmd("q")
-  else
-    -- Open Netrw in the current directory
-    vim.cmd("25Lexplore %:p:h")
-  end
-end
-
--- Map the function to a key (for example, <leader>e)
-vim.keymap.set("n", "<leader>e", ToggleNetrw)
 
 -- In visual mode, moves the current line down by one position
 vim.keymap.set("v", "J", ":m '>+1<CR>gv=gv")

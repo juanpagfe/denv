@@ -38,7 +38,7 @@ vim.opt.undodir = os.getenv("HOME") .. "/.vim/undodir"
 vim.opt.undofile = true
 
 -- Disable highlighting of search results after the search is completed
-vim.opt.hlsearch = true
+vim.opt.hlsearch = false
 
 -- Enable incremental search (search results update as you type)
 vim.opt.incsearch = true
@@ -65,7 +65,3 @@ vim.opt.colorcolumn = "80"
 vim.g.mapleader = " "
 
 vim.g.netrw_banner = 0
--- Changes the netrw stype so that it seems more like a tree
-vim.g.netrw_liststyle = 3
-vim.g.netrw_browse_split = 4
-vim.g.netrw_altv = 1
