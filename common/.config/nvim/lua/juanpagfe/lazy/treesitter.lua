@@ -41,5 +41,10 @@ return {
         }
 
         vim.treesitter.language.register("templ", "templ")
+        vim.filetype.add({
+            filename = {
+                ["Jenkinsfile"] = "groovy",
+            },
+        })
     end
 }
