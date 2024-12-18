@@ -68,12 +68,6 @@ function pman(){
 #Clear terminal and change directory to home
 alias c='clear'
 
-if [ "$MACHINE" = "Mac" ]; then
-  alias copy="pbcopy"
-else
-  alias copy="xclip -i -sel p -f | xclip -i -sel c"
-fi
-
 #Creates a file
 alias t='touch'
 
