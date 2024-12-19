@@ -1,5 +1,7 @@
 #!/bin/bash
 
+MACHINE=$(get_machine)
+
 if [[ "$MACHINE" != "Linux" ]]; then
     echo "This program only works in Linux systems"
     exit 1

@@ -1,14 +1,11 @@
 #!/bin/bash
 
-if [ -z "$MACHINE" ]; then
-    # set_machine is a bash file located in ~/.local/bin
-    set_machine
-fi
+MACHINE=$(get_machine)
 
 if [[ $# -eq 0 ]]; then
-    if [ "$MACHINE" = "Linux" ]; then
+    if [[ "$MACHINE" = "Linux" ]]; then
         NICS=($(ip addr list | awk -F': ' '/^[0-9]/ {print $2}'))
-    elif [ "$MACHINE" = "Mac" ]; then
+    elif [[ "$MACHINE" = "Mac" ]]; then
         NICS=($(ifconfig | pcregrep -M -o '^[^\t:]+(?=:([^\n]|\n\t)*status: active)'))
     else
         NICS=("$@")
@@ -19,9 +16,9 @@ fi
 
 first=true
 for nic in "${NICS[@]}"; do
-    if [ "$MACHINE" = "Linux" ]; then
+    if [[ "$MACHINE" = "Linux" ]]; then
         ip=$(ip -4 addr show $nic | grep -oP "(?<=inet ).*(?=/)")
-    elif [ "$MACHINE" = "Mac" ]; then
+    elif [[ "$MACHINE" = "Mac" ]]; then
         ip=$(ifconfig $nic | grep -E "([0-9]{1,3}\.){3}[0-9]{1,3}" | head -1 | awk '{ print $2 }')
     fi
     pubip=$(curl --interface $nic -s ipinfo.io/ip; echo)

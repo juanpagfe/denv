@@ -1,5 +1,7 @@
 #!/bin/bash
 
+MACHINE=$(get_machine)
+
 result=$(dig $1 +short)
 if [ -z "$result" ]; then
     if [[ "$MACHINE" = "Linux" ]]; then

@@ -1,0 +1,13 @@
+#!/bin/bash
+if [[ ! -f "~/.machine" ]]; then
+    unameOut="$(uname -s)"
+    case "${unameOut}" in
+        Linux*)     export MACHINE=Linux;;
+        Darwin*)    export MACHINE=Mac;;
+        CYGWIN*)    export MACHINE=Cygwin;;
+        MINGW*)     export MACHINE=MinGw;;
+        *)          export MACHINE="UNKNOWN:${unameOut}"
+    esac
+    echo "$MACHINE" > ~/.machine
+fi
+cat ~/.machine

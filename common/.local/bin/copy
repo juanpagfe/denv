@@ -1,26 +1,13 @@
 #!/bin/bash
 
-# Check system to choose a clipboard manager
-command_copy=""
-if [ "$MACHINE" = "Mac" ]; then
-  command_copy="pbcopy"
-else
-  command_copy="xclip -i -sel p -f | xclip -i -sel c"
-fi
+MACHINE=$(get_machine)
 
-# Checks if input comes from a pipe
+value=""
 if [ -p /dev/stdin ]; then
-    echo "Input comes from a pipe:"
-    cat /dev/stdin | eval $command_copy
-    echo "PRINTED"
-    exit 0
-# Checks if input comes from an argument file
+    value=$(cat /dev/stdin)
 elif [ $# -gt 0 ]; then
-    echo "Input comes from files:"
     if [ -f "$1" ]; then
-        echo "File: $1"
-        cat "$1" | eval $command_copy
-        exit 0
+        value=$(cat "$1")
     else
         echo "Error: $file is not a valid file."
         exit 1
@@ -30,3 +17,10 @@ else
     exit 1
 fi
 
+if [[ "$MACHINE" = "Mac" ]]; then
+    echo "$value" | pbcopy
+elif [[ "$MACHINE" = "Linux" ]]; then
+    echo "$value" | xclip -i -sel p -f | xclip -i -sel c
+else
+    echo "System is not supported"
+fi
