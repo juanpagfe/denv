@@ -1,5 +1,10 @@
 #!/bin/bash
 
+usage() {
+  echo "Usage 1: $0 <file>"
+  echo "Usage 2: <piped-command> | $0"
+}
+
 MACHINE=$(get_machine)
 
 value=""
@@ -10,10 +15,12 @@ elif [ $# -gt 0 ]; then
         value=$(cat "$1")
     else
         echo "Error: $file is not a valid file."
+        usage
         exit 1
     fi
 else
     echo "No input provided."
+    usage
     exit 1
 fi
 
