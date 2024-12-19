@@ -87,7 +87,11 @@ end, { noremap = true, silent = true })
 --     vim.cmd("so")
 -- end)
 
-
+-- In normal mode, switches to the next buffer
 vim.keymap.set("n", "<Tab>", ":bnext <CR>")
+
+-- In normal mode, switches to the previous buffer
 vim.keymap.set("n", "<S-Tab>", ":bprevious <CR>")
+
+-- In normal mode, deletes the current buffer
 vim.keymap.set("n", "<leader>d", ":bd <CR>")
