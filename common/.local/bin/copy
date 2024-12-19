@@ -1,26 +1,32 @@
 #!/bin/bash
 
 # Check system to choose a clipboard manager
+command_copy=""
 if [ "$MACHINE" = "Mac" ]; then
-  tcopy="pbcopy"
+  command_copy="pbcopy"
 else
-  tcopy="xclip -i -sel p -f | xclip -i -sel c"
+  command_copy="xclip -i -sel p -f | xclip -i -sel c"
 fi
 
 # Checks if input comes from a pipe
 if [ -p /dev/stdin ]; then
     echo "Input comes from a pipe:"
-    cat /dev/stdin | tcopy
+    cat /dev/stdin | eval $command_copy
+    echo "PRINTED"
+    exit 0
 # Checks if input comes from an argument file
 elif [ $# -gt 0 ]; then
     echo "Input comes from files:"
     if [ -f "$1" ]; then
         echo "File: $1"
-        cat "$1" | tcopy
+        cat "$1" | eval $command_copy
+        exit 0
     else
         echo "Error: $file is not a valid file."
+        exit 1
     fi
 else
     echo "No input provided."
+    exit 1
 fi
 
