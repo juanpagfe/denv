@@ -1,5 +1,12 @@
 -- Opens the directory above the current buffer (using Ex command)
-vim.keymap.set("n", "<leader><Esc>", vim.cmd.Ex)
+-- vim.keymap.set("n", "<leader><Esc>", vim.cmd.Ex)
+vim.keymap.set("n", "<leader><Esc>", function ()
+    if vim.bo.filetype == "netrw" then
+        vim.cmd('normal -')
+    else
+        vim.cmd("Ex")
+    end
+end)
 --vim.api.nvim_set_keymap('n', '<leader>e', ':25Lexplore %:p:h<CR>', { noremap = true, silent = true })
 
 -- In visual mode, moves the current line down by one position
