@@ -41,29 +41,6 @@ alias lsiptables='sudo iptables -L -n -v'
 #                                                                                             #
 ###############################################################################################
 
-YUM_CMD=$(which yum >> /dev/null; echo $?)
-APT_GET_CMD=$(which apt-get >> /dev/null; echo $?)
-BREW_GET_CMD=$(which brew >> /dev/null; echo $?)
-
-if [[ $YUM_CMD -eq 0 ]]; then
-  export PACKAGE_MANAGER=yum
-elif [[ $APT_GET_CMD -eq 0 ]]; then
-  export PACKAGE_MANAGER=apt-get
-elif [[ $BREW_CMD -eq 0 ]]; then
-  export PACKAGE_MANAGER=brew
-else
-  echo "Error, can't get PMAN"
-fi
-
-#Package manager
-function pman(){
-  if [ $PACKAGE_MANAGER = "brew" ]; then
-    $PACKAGE_MANAGER $@
-  else
-    sudo $PACKAGE_MANAGER $@
-  fi
-}
-
 #Clear terminal and change directory to home
 alias c='clear'
 
@@ -72,6 +49,9 @@ alias t='touch'
 
 #Close terminal
 alias e='exit'
+
+#Bring to foreground a background job
+alias f='fg'
 
 #History+grep shortcut
 alias hs='history | grep'

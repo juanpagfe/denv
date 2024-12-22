@@ -32,6 +32,7 @@ cp rc/.* ~/
 if [ ! -d ~/.local ]; then
     mkdir ~/.local
 fi
+mkdir -p ~/.local/bin
 cp -r common/.local/bin/* ~/.local/bin
 
 #Merge environment files

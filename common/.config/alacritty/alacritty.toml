@@ -1,3 +1,10 @@
+[window]
+startup_mode = "Maximized"
+
+[shell]
+program = "/bin/zsh"
+args = ["-l"]
+
 [font]
 size = 12.0
 
