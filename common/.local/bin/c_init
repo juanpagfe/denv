@@ -93,7 +93,7 @@ BUILD_DIR = build
 # Files
 SRC = $(wildcard $(SRC_DIR)/*.c)
 OBJ = $(SRC:$(SRC_DIR)/%.c=$(BUILD_DIR)/%.o)
-TARGET = $(BUILD_DIR)/my_program
+TARGET = $(BUILD_DIR)/THE_PROGRAM
 
 # Library flags
 LIBS =
