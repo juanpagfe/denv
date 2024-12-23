@@ -48,12 +48,6 @@ cat << 'EOF' > .gitignore
 *.loT
 *.map
 
-# CMake and Makefile-related files
-CMakeFiles/
-CMakeCache.txt
-cmake_install.cmake
-Makefile
-
 # Debug files
 *.dSYM/
 *.stackdump
