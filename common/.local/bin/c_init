@@ -1,0 +1,199 @@
+#!/bin/bash
+
+usage() {
+  echo "Usage: $0 <project-name>"
+}
+
+if [[ -z "$1" || -d "$1" ]]; then
+    echo "The name of the project is empty or already exist on the current directory"
+    usage
+    exit 1
+else
+    project="$1"
+fi
+
+mkdir -p $project/src
+mkdir -p $project/build
+mkdir -p $project/include
+
+touch $project/build/.keep
+cd $project 
+git init
+
+touch .gitignore
+touch src/main.c
+touch src/utils.c
+touch include/utils.h
+
+cat << 'EOF' > .gitignore
+# Compiled object files
+*.o
+
+# Compiled binary files
+*.out
+*.exe
+
+# Dynamic libraries
+*.so
+*.dll
+*.dylib
+
+# Static libraries
+*.a
+*.lib
+
+# Generated files (e.g., from configure scripts)
+*.lo
+*.la
+*.loT
+*.map
+
+# CMake and Makefile-related files
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# Debug files
+*.dSYM/
+*.stackdump
+
+# Logs and temporary files
+*.log
+*.tmp
+*.swp
+*.swo
+*.bak
+*.orig
+
+# Dependency files
+*.d
+
+# IDE and editor specific files
+.vscode/
+.idea/
+*.code-workspace
+*.ncb
+*.sdf
+*.suo
+*.user
+*.project
+*.cproject
+
+# Backup files
+*~
+
+# Generated documentation
+docs/
+EOF
+
+cat << 'EOF' > Makefile
+# Compiler and flags
+CC = gcc
+CFLAGS = -Iinclude -Wall -Wextra -g
+
+# Directories
+SRC_DIR = src
+BUILD_DIR = build
+
+# Files
+SRC = $(wildcard $(SRC_DIR)/*.c)
+OBJ = $(SRC:$(SRC_DIR)/%.c=$(BUILD_DIR)/%.o)
+TARGET = $(BUILD_DIR)/THE_PROGRAM
+
+# Default target
+all: $(TARGET)
+
+# Link object files to create the final executable
+$(TARGET): $(OBJ)
+	$(CC) $(CFLAGS) $^ -o $@
+
+# Compile source files into object files
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
+	mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Clean build files
+clean:
+	rm -rf $(BUILD_DIR)
+EOF
+
+sed -i "s|THE_PROGRAM|$project|g" Makefile
+
+
+cat << 'EOF' > src/main.c
+#include <stdio.h>
+#include "utils.h" // Include the header file for the utilities
+
+int main() {
+    // Example 1: Factorial Calculation
+    int number = 6;
+    unsigned long fact = factorial(number);
+    printf("The factorial of %d is %lu\n", number, fact);
+
+    // Example 2: Reverse a String
+    char str[] = "C programming is fun!";
+    printf("Original string: %s\n", str);
+    reverse_string(str);
+    printf("Reversed string: %s\n", str);
+
+    // Example 3: Find Maximum of Two Integers
+    int x = 42, y = 27;
+    printf("The maximum of %d and %d is %d\n", x, y, max(x, y));
+
+    return 0;
+}
+EOF
+
+
+cat << 'EOF' > include/utils.h
+#ifndef UTILS_H
+#define UTILS_H
+
+#include <stddef.h> // For size_t
+
+// Function to calculate the factorial of a number
+unsigned long factorial(int n);
+
+// Function to reverse a string in place
+void reverse_string(char *str);
+
+// Function to find the maximum of two integers
+int max(int a, int b);
+
+#endif // UTILS_H
+EOF
+
+
+cat << 'EOF' > src/utils.c
+#include "utils.h"
+#include <string.h> // For strlen
+#include <stdio.h>  // For NULL
+
+// Function to calculate the factorial of a number
+unsigned long factorial(int n) {
+    if (n < 0) return 0; // Factorial is undefined for negative numbers
+    unsigned long result = 1;
+    for (int i = 2; i <= n; i++) {
+        result *= i;
+    }
+    return result;
+}
+
+// Function to reverse a string in place
+void reverse_string(char *str) {
+    if (str == NULL) return;
+
+    size_t len = strlen(str);
+    for (size_t i = 0; i < len / 2; i++) {
+        char temp = str[i];
+        str[i] = str[len - 1 - i];
+        str[len - 1 - i] = temp;
+    }
+}
+
+// Function to find the maximum of two integers
+int max(int a, int b) {
+    return (a > b) ? a : b;
+}
+EOF
