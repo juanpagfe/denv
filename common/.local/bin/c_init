@@ -84,7 +84,7 @@ EOF
 cat << 'EOF' > Makefile
 # Compiler and flags
 CC = gcc
-CFLAGS = -Iinclude -Wall -Wextra -g
+CFLAGS = -Iinclude -Wall -Wextra
 
 # Directories
 SRC_DIR = src
@@ -111,12 +111,14 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # Debug target
+debug: CFLAGS += -g
 debug: $(TARGET)
 	gdb $(TARGET)
 
 # Clean build files
 clean:
 	rm -rf $(BUILD_DIR)
+
 EOF
 
 sed -i "s|THE_PROGRAM|$project|g" Makefile
