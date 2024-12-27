@@ -1,9 +1,6 @@
 [window]
 startup_mode = "Maximized"
 
-[terminal]
-shell = "/bin/zsh"
-
 [font]
 size = 12.0
 
