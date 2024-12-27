@@ -26,8 +26,9 @@ touch src/utils.c
 touch include/utils.h
 
 cat << 'EOF' > .gitignore
-# Cache folders
+# Cache and build folders
 .cache/
+build/
 
 # Compiled object files
 *.o
