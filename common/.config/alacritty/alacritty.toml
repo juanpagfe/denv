@@ -14,11 +14,6 @@ action = "Copy"
 key = "C"
 mods = "Control|Shift"
 
-[[keyboard.bindings]]
-action = "ToggleViMode"
-key = "V"
-mods = "Control"
-
 [mouse]
 hide_when_typing      = true
 bindings = [
