@@ -30,6 +30,9 @@ cat << 'EOF' > .gitignore
 .cache/
 build/
 
+# clangd generated file
+compile_commands.json
+
 # Compiled object files
 *.o
 
