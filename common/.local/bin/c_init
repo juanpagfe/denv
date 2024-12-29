@@ -17,7 +17,9 @@ mkdir -p $project/build
 mkdir -p $project/include
 
 touch $project/build/.keep
+
 cd $project 
+
 git init
 
 touch .gitignore
@@ -88,47 +90,43 @@ compile_commands.json
 docs/
 EOF
 
-cat << 'EOF' > Makefile
-# Compiler and flags
-CC = gcc
-CFLAGS = -Iinclude -Wall -Wextra
+cat << 'EOF' > CMakeLists.txt
+# Minimum CMake version required
+cmake_minimum_required(VERSION 3.10)
 
-# Directories
-SRC_DIR = src
-BUILD_DIR = build
+# Project name
+project(THE_PROGRAM)
 
-# Files
-SRC = $(wildcard $(SRC_DIR)/*.c)
-OBJ = $(SRC:$(SRC_DIR)/%.c=$(BUILD_DIR)/%.o)
-TARGET = $(BUILD_DIR)/THE_PROGRAM
+# Set compiler flags
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra")
 
-# Library flags
-LIBS =
+# Define directories
+set(SRC_DIR src)
+set(INCLUDE_DIR include)
+set(BUILD_DIR ${CMAKE_BINARY_DIR})
 
-# Default target
-all: $(TARGET)
+# Add include directory
+include_directories(${INCLUDE_DIR})
 
-# Link object files to create the final executable
-$(TARGET): $(OBJ)
-	$(CC) $(CFLAGS) $^ $(LIBS) -o $@
+# Gather source files (no need to include headers here)
+file(GLOB SRC "${SRC_DIR}/*.c")
 
-# Compile source files into object files
-$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
-	mkdir -p $(BUILD_DIR)
-	$(CC) $(CFLAGS) -c $< -o $@
+# Add the executable target
+add_executable(THE_PROGRAM ${SRC})
 
-# Debug target
-debug: CFLAGS += -g
-debug: $(TARGET)
-	gdb $(TARGET)
+# Set output directory for the executable
+set_target_properties(THE_PROGRAM PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${BUILD_DIR})
 
-# Clean build files
-clean:
-	rm -rf $(BUILD_DIR)
+# Install the executable only
+install(TARGETS THE_PROGRAM
+        RUNTIME DESTINATION bin)
 
+# Optional: Debug configuration
+set(CMAKE_BUILD_TYPE "Release")
+add_custom_target(debug COMMAND ${CMAKE_COMMAND} -DCMAKE_BUILD_TYPE=Debug .)
 EOF
 
-sed -i "s|THE_PROGRAM|$project|g" Makefile
+sed -i "s|THE_PROGRAM|$project|g" CMakeLists.txt
 
 
 cat << 'EOF' > src/main.c
@@ -208,4 +206,8 @@ int max(int a, int b) {
 }
 EOF
 
-bear -- make
+cmake -S . -B build
+
+bear -- cmake --build build
+
+cd -
