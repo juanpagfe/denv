@@ -4,6 +4,7 @@ local masonlsp = require("mason-lspconfig");
 local lspconfig = require("lspconfig");
 local lsp_defaults = lspconfig.util.default_config;
 local cmpnvimlsp = require("cmp_nvim_lsp");
+local config = require("juanpagfe.config");
 
 
 mason.setup()
@@ -41,6 +42,7 @@ lspconfig.rust_analyzer.setup({
         }
     }
 })
+
 lspconfig.lua_ls.setup {
   settings = {
     Lua = {
@@ -101,3 +103,4 @@ vim.diagnostic.config({
         prefix = "",
     },
 })
+

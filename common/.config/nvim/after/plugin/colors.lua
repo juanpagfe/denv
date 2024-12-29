@@ -1,42 +1,27 @@
-local cacheFilePath = vim.fn.stdpath('data') .. '/jpcolor'
+local config = require("juanpagfe.config")
 
-
-local function storecolor(color)
-    local file = io.open(cacheFilePath, "w")
-    if file then
-        file:write(color)
-        file:close()
-    else
-        print("Failed to open cache file for writing")
+local function set_last_color()
+    local color = config.get_cfg_val("color")
+    if color == "" then
+        color = "Dark"
     end
-end
-
-local function getlastcolor()
-    local file = io.open(cacheFilePath, "r")
-    if file then
-        local color = file:read("*all")
-        file:close()
-        vim.cmd(color)
-    else
-        vim.cmd("Dark");
-    end
+    config.set_cfg_val("color", color)
+    vim.cmd(color)
 end
 
 vim.api.nvim_create_user_command('Light', function()
     vim.opt.background = "light"
     vim.cmd("colorscheme tokyonight-day")
     vim.cmd("hi Normal guifg=#0d2573 guibg=#fffff7 ctermfg=19 ctermbg=230");
-    storecolor("Light");
+    config.set_cfg_val("color", "Light")
 end, {})
 
 vim.api.nvim_create_user_command('Dark', function()
     vim.opt.background = "dark"
     vim.cmd("colorscheme tokyonight")
     vim.cmd("hi Normal guifg=#add4fb guibg=#171421 ctermfg=19 ctermbg=230");
-    storecolor("Dark");
+    config.set_cfg_val("color", "Dark")
 end, {})
-
-
 
 require("tokyonight").setup({
     -- your configuration comes here
@@ -52,4 +37,4 @@ require("tokyonight").setup({
     },
 })
 
-getlastcolor()
+set_last_color()
