@@ -10,9 +10,6 @@ local config = require("juanpagfe.config");
 mason.setup()
 
 
-fidget.setup({})
-
-
 masonlsp.setup({
   ensure_installed = { "lua_ls", "solargraph" }
 })
