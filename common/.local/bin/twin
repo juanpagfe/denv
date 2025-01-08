@@ -1,9 +1,11 @@
 #!/bin/bash
+TMUX_PATH="$HOME/.config/tmux" 
+FZFDIRS="$TMUX_PATH/fzfdirs" 
 
 if [[ $# -eq 1 ]]; then
     selected=$1
 else
-    selected=$(find ~/OneDrive/2Areas ~/work/jp ~/work/jp/.dotfiles/common/.config ~/work/cecropia ~/work/listen ~/ ~/work -mindepth 1 -maxdepth 1 -type d | fzf)
+    selected=$(cat "$FZFDIRS" | xargs -I {} bash -c 'find $(eval echo {}) -mindepth 1 -maxdepth 1 -type d' | fzf)
 fi
 
 if [[ -z $selected ]]; then

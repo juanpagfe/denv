@@ -1,25 +1,115 @@
 #!/bin/bash
 
-if [[ $# -eq 1 ]]; then
-    selected=$1
-else
-    selected=$(find ~/OneDrive/2Areas ~/work/jp ~/work/jp/.dotfiles/common/.config ~/work/cecropia ~/work/listen ~/ ~/work -mindepth 1 -maxdepth 1 -type d | fzf)
-fi
+TMUX_PATH="$HOME/.config/tmux" 
+FZFDIRS="$TMUX_PATH/fzfdirs" 
 
-if [[ -z $selected ]]; then
-    exit 0
-fi
+usage() {
+    echo "This is an implementation of a tmux-sessionizer with dynamic folders"
+    echo "Usage: $0 [options] <argument>"
+    echo "Options:"
+    echo "  -h, --help             Show this help message"
+    echo "  -a, --add <directory>  Directory to add for the fzf"
+    echo "  -l, --list             List directories to fzf"
+    echo "  -d, --drop             Drop a directory"
+}
 
-selected_name=$(basename "$selected" | tr . _)
-tmux_running=$(pgrep tmux)
+list_dirs() {
+    cat -n "$FZFDIRS"
+}
 
-if [[ -z $TMUX ]] && [[ -z $tmux_running ]]; then
-    tmux new-session -s $selected_name -c $selected
-    exit 0
-fi
+add_dir() {
+    if [ ! -d "$TMUX_PATH" ]; then
+        mkdir -p "$TMUX_PATH"
+    fi
+    if [ ! -f "$FZFDIRS" ]; then
+        touch "$FZFDIRS" 
+    fi
+    if [ ! -d "$1" ]; then
+        echo "If you are adding, you must give a directory"
+        usage
+        exit 1
+    fi
+    echo "$1" >> "$FZFDIRS"
+    list_dirs
+}
 
-if ! tmux has-session -t=$selected_name 2> /dev/null; then
-    tmux new-session -ds $selected_name -c $selected
-fi
+drop_dir() {
+    cat -n "$FZFDIRS"
+    fnumber=$(grep -c '' "$FZFDIRS")
+    read -p "Enter a directory number to remove [Default: 0 (None)]: " num
+    if [[ ! "$num" =~ ^[0-9]+$ || "$num" -le 1 || "$num" -gt $fnumber ]]; then
+        num=0
+    fi
+    if [ "$num" -ne 0 ]; then
+        echo "Removing:"
+        sed -n "${num}p" "$FZFDIRS"
+        sed -i '' "${num}d" "$FZFDIRS"
+    else
+        echo "None removed"
+        exit 0
+    fi
+}
 
-tmux switch-client -t $selected_name
+switch_to() {
+    if [[ -z $TMUX ]]; then
+        tmux attach-session -t $1
+    else
+        tmux switch-client -t $1
+    fi
+}
+
+has_session() {
+    tmux list-sessions | grep -q "^$1:"
+}
+
+sessionizer() {
+    if [[ $# -eq 1 ]]; then
+        selected=$1
+    else
+        selected=$(cat "$FZFDIRS" | xargs -I {} bash -c 'find $(eval echo {}) -mindepth 1 -maxdepth 1 -type d' | fzf)
+    fi
+
+    if [[ -z $selected ]]; then
+        exit 0
+    fi
+
+    selected_name=$(basename "$selected" | tr . _)
+    tmux_running=$(pgrep tmux)
+
+    if [[ -z $TMUX ]] && [[ -z $tmux_running ]]; then
+        tmux new-session -s $selected_name -c $selected
+        exit 0
+    fi
+
+    if ! has_session $selected_name; then
+        tmux new-session -ds $selected_name -c $selected
+    fi
+
+    switch_to $selected_name
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -a|--add)
+            add_dir $2
+            shift 2
+            exit 0
+            ;;
+        -l|--list)
+            list_dirs
+            shift
+            exit 0
+            ;;
+        -d|--drop)
+            drop_dir
+            shift
+            exit 0
+            ;;
+        -h|--help)
+            usage
+            shift
+            exit 0
+            ;;
+    esac
+done
+sessionizer $@
