@@ -23,8 +23,9 @@ check_protocol() {
 }
 
 check_port() {
-    if [[ ! "$1" =~ ^[0-9]+$ || $port -lt 1 || $port -gt 65535 ]]; then
-        echo "Invalid port. Must be between 0-65535"
+    local port="$1"
+    if [[ ! "$port" =~ ^[0-9]+$ || $port -lt 1 || $port -gt 65535 ]]; then
+        echo "Invalid port '$port'. Must be between 0-65535"
         usage
         exit 1
     fi
@@ -33,16 +34,27 @@ check_port() {
 is_port_open() {
     local protocol="$1"
     local port="$2"
-
-    if sudo iptables -L INPUT -n -v | grep -qE "${protocol} .* dpt:$port\b"; then
-        echo "Port $port is open for protocol $protocol."
+    if sudo iptables -L INPUT -n -v | grep -qiE "ACCEPT.*$protocol.*dpt:$port"; then
+        echo "$protocol:$port = OPEN"
         return 0
     else
-        echo "Port $port is not open for protocol $protocol."
+        echo "$protocol:$port = CLOSED"
         return 1
     fi
 }
 
+iptables_remove_if_exist() {
+    local protocol="$1"
+    local port="$2"
+    local rule="$3"
+    if sudo iptables -L INPUT -n -v | grep -qiE "$rule.*$protocol.*dpt:$port"; then
+        echo "Rule for $protocol protocol on port $port exists. Removing it..."
+        sudo iptables -D INPUT -p $protocol --dport $port -j $rule
+        echo "Rule removed."
+    else
+        echo "Rule for $protocol protocol on port $port does not exist."
+    fi
+}
 
 if [ $# -eq 0 ]; then
   echo "You have to provide arguments."
@@ -53,11 +65,11 @@ fi
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -c|--check)
-            PROTOCOL=$2
-            PORT=$3
-            check_protocol $PROTOCOL
-            check_port $PORT
-            is_opened $PROTOCOL $PORT
+            protocol=$2
+            port=$3
+            check_protocol $protocol
+            check_port $port
+            is_port_open $protocol $port
             shift 3
             break
             ;;
@@ -66,20 +78,23 @@ while [[ $# -gt 0 ]]; do
             shift 1
             exit 0
             ;;
+        *)
+            protocol=$1
+            port=$2
+            check_protocol $protocol
+            check_port $port
+            if ! is_port_open "$protocol" "$port"; then
+                echo "Opening port $protocol:$port..."
+                iptables_remove_if_exist $protocol $port "DROP"
+                sudo iptables -A INPUT -p $protocol --dport $port -j ACCEPT
+                is_port_open $protocol $port
+            else
+                echo "Closing port $protocol:$port..."
+                iptables_remove_if_exist $protocol $port "ACCEPT"
+                sudo iptables -A INPUT -p $protocol --dport $port -j DROP
+                is_port_open $protocol $port
+            fi
+            exit 0
+            ;;
     esac
 done
-
-PROTOCOL=$1
-PORT=$2
-check_protocol $PROTOCOL
-check_port $PORT
-if is_port_open "$PROTOCOL" "$PORT"; then
-    sudo iptables -D INPUT -p $PROTOCOL --dport $PORT -j ACCEPT
-    sudo iptables -A INPUT -p tcp --dport 8080 -j DROP
-    echo "Port $PROTOCOL:$PORT has been closed"
-else
-    sudo iptables -D INPUT -p $PROTOCOL --dport $PORT -j DROP
-    sudo iptables -A INPUT -p $PROTOCOL --dport $PORT -j ACCEPT
-    echo "Port $PROTOCOL:$PORT has been opened"
-fi
-
