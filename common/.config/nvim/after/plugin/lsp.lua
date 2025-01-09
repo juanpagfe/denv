@@ -1,10 +1,8 @@
 local mason = require("mason");
-local fidget = require("fidget");
 local masonlsp = require("mason-lspconfig");
 local lspconfig = require("lspconfig");
 local lsp_defaults = lspconfig.util.default_config;
 local cmpnvimlsp = require("cmp_nvim_lsp");
-local config = require("juanpagfe.config");
 
 
 mason.setup()
@@ -26,6 +24,7 @@ lsp_defaults.capabilities = vim.tbl_deep_extend(
   cmpnvimlsp.default_capabilities()
 )
 
+lspconfig.clangd.setup({})
 
 lspconfig.rust_analyzer.setup({
     settings = {
