@@ -2,7 +2,31 @@
 
 MACHINE=$(get_machine)
 
-if [[ $# -eq 0 ]]; then
+usage() {
+    echo -e "Tool to get the local and public IP address per network interface. You can choose the NIC as well giving it as an argument\n"
+    echo "Usage: $0 [options] <network-interface-name>"
+    echo "Options:"
+    echo "  -h, --help      Show this help message"
+}
+
+wargs=false
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            NICS=("$@")
+            wargs=true
+            shift
+            break
+            ;;
+    esac
+done
+
+if [[ $# -eq 0 && -z "$NICS" ]]; then
     if [[ "$MACHINE" = "Linux" ]]; then
         NICS=($(ip addr list | awk -F': ' '/^[0-9]/ {print $2}'))
     elif [[ "$MACHINE" = "Mac" ]]; then
@@ -10,26 +34,29 @@ if [[ $# -eq 0 ]]; then
     else
         NICS=("$@")
     fi
-else
-    NICS=("$@")
 fi
 
 first=true
 for nic in "${NICS[@]}"; do
-    if [[ "$MACHINE" = "Linux" ]]; then
-        ip=$(ip -4 addr show $nic | grep -oP "(?<=inet ).*(?=/)")
-    elif [[ "$MACHINE" = "Mac" ]]; then
-        ip=$(ifconfig $nic | grep -E "([0-9]{1,3}\.){3}[0-9]{1,3}" | head -1 | awk '{ print $2 }')
-    fi
     if [[ "$nic" != "lo" && "$nic" != "lo0" ]]; then
-        pubip=$(curl --interface $nic -s ipinfo.io/ip; echo)
+        if [[ "$MACHINE" = "Linux" ]]; then
+            ip=$(ip -4 addr show $nic | grep -oP "(?<=inet ).*(?=/)")
+        elif [[ "$MACHINE" = "Mac" ]]; then
+            ip=$(ifconfig $nic | grep -E "([0-9]{1,3}\.){3}[0-9]{1,3}" | head -1 | awk '{ print $2 }')
+        fi
         if [[ ! -z $ip ]]; then
+            pubip=$(curl --interface $nic -s ipinfo.io/ip; echo)
             if [ "$first" = true ]; then
                 first=false
                 echo "------------------------------------"
             fi
             echo "$nic: $ip | $pubip" | awk -F '[:| ]+' '{print "Network Interface: " $1 "\nLocal IP: " $2 "\nPublic IP: " $3}'
             echo "------------------------------------"
+        else
+            if $wargs; then
+                echo "The network interface '$nic' does not have a local ip address or does not exist."
+                exit 1
+            fi
         fi
     fi
 done
