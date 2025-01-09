@@ -21,13 +21,15 @@ for nic in "${NICS[@]}"; do
     elif [[ "$MACHINE" = "Mac" ]]; then
         ip=$(ifconfig $nic | grep -E "([0-9]{1,3}\.){3}[0-9]{1,3}" | head -1 | awk '{ print $2 }')
     fi
-    pubip=$(curl --interface $nic -s ipinfo.io/ip; echo)
-    if [[ ! -z $ip ]]; then
-        if [ "$first" = true ]; then
-            first=false
+    if [[ "$nic" != "lo" && "$nic" != "lo0" ]]; then
+        pubip=$(curl --interface $nic -s ipinfo.io/ip; echo)
+        if [[ ! -z $ip ]]; then
+            if [ "$first" = true ]; then
+                first=false
+                echo "------------------------------------"
+            fi
+            echo "$nic: $ip | $pubip" | awk -F '[:| ]+' '{print "Network Interface: " $1 "\nLocal IP: " $2 "\nPublic IP: " $3}'
             echo "------------------------------------"
         fi
-        echo "$nic: $ip | $pubip" | awk -F '[:| ]+' '{print "Network Interface: " $1 "\nLocal IP: " $2 "\nPublic IP: " $3}'
-        echo "------------------------------------"
     fi
 done
