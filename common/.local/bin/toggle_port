@@ -1,0 +1,85 @@
+#!/bin/bash
+
+MACHINE=$(get_machine)
+
+if [[ "$MACHINE" != "Linux" ]]; then
+    echo "This program only works in Linux systems"
+    exit 1
+fi
+
+usage() {
+  echo "Usage: $0 <protocol> <port>"
+  echo "Options:"
+  echo "  -h, --help                        Show this help message"
+  echo "  -c, --check <protocol> <port>     Checks status of a given port"
+}
+
+check_protocol() {
+    if [[ -z "$1" || ( "$1" != "tcp" && "$1" != "TCP" && "$1" != "udp" && "$1" != "UDP" ) ]]; then
+        echo "Invalid protocol. Please use tcp, TCP, udp, or UDP."
+        usage
+        exit 1
+    fi
+}
+
+check_port() {
+    if [[ ! "$1" =~ ^[0-9]+$ || $port -lt 1 || $port -gt 65535 ]]; then
+        echo "Invalid port. Must be between 0-65535"
+        usage
+        exit 1
+    fi
+}
+
+is_port_open() {
+    local protocol="$1"
+    local port="$2"
+
+    if sudo iptables -L INPUT -n -v | grep -qE "${protocol} .* dpt:$port\b"; then
+        echo "Port $port is open for protocol $protocol."
+        return 0
+    else
+        echo "Port $port is not open for protocol $protocol."
+        return 1
+    fi
+}
+
+
+if [ $# -eq 0 ]; then
+  echo "You have to provide arguments."
+  usage
+  exit 1
+fi
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -c|--check)
+            PROTOCOL=$2
+            PORT=$3
+            check_protocol $PROTOCOL
+            check_port $PORT
+            is_opened $PROTOCOL $PORT
+            shift 3
+            break
+            ;;
+        -h|--help)
+            usage
+            shift 1
+            exit 0
+            ;;
+    esac
+done
+
+PROTOCOL=$1
+PORT=$2
+check_protocol $PROTOCOL
+check_port $PORT
+if is_port_open "$PROTOCOL" "$PORT"; then
+    sudo iptables -D INPUT -p $PROTOCOL --dport $PORT -j ACCEPT
+    sudo iptables -A INPUT -p tcp --dport 8080 -j DROP
+    echo "Port $PROTOCOL:$PORT has been closed"
+else
+    sudo iptables -D INPUT -p $PROTOCOL --dport $PORT -j DROP
+    sudo iptables -A INPUT -p $PROTOCOL --dport $PORT -j ACCEPT
+    echo "Port $PROTOCOL:$PORT has been opened"
+fi
+
