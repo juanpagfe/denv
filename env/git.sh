@@ -18,7 +18,8 @@ alias gcm='git commit -m'
 
 # Git checkout aliases
 alias gcob='git checkout -b'
-alias gcof='git checkout'
+alias gcof='git switch'
+alias gsw='git switch'
 
 # Git fetch aliases
 alias gf='git fetch'
@@ -29,7 +30,7 @@ alias gp='git pull --rebase'
 
 # Git pull from origin aliases
 alias gprod='git pull --rebase origin dev'
-alias gprom='git pull --rebase origin master'
+alias gprom='git pull --rebase origin main'
 
 # Git push to origin aliases
 alias gpush='git push origin'
@@ -52,10 +53,4 @@ alias gslog="git log --graph --abbrev-commit --decorate --date=relative --format
 
 # Iterate through git submodules
 alias gsfe='git submodule foreach'
-
-###############################################################################################
-#                                                                                             #
-#                                      GIT FUNCTIONS                                          #
-#                                                                                             #
-###############################################################################################
 
