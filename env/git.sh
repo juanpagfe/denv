@@ -18,7 +18,7 @@ alias gcm='git commit -m'
 
 # Git checkout aliases
 alias gcob='git checkout -b'
-alias gcof='git switch'
+alias gcof='git checkout'
 alias gsw='git switch'
 
 # Git fetch aliases
