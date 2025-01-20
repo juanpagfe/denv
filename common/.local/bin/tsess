@@ -110,6 +110,11 @@ while [[ $# -gt 0 ]]; do
             shift
             exit 0
             ;;
+        *)
+            echo "heehehehe"
+            sessionizer $@
+            shift 
+            break
+            ;;
     esac
 done
-sessionizer $@
