@@ -16,7 +16,7 @@ set $mod Mod4
 font pango:monospace 14px
 
 # Remove borders from windows and set custom border size and color for focused windows.
-for_window [class="^.*"] border pixel 1
+for_window [class="^.*"] border pixel 2
 for_window [class="^.*"] client.focused #77dd77 #285577 #ffffff #2e9ef4 #285577
 
 # Launch desktop files with dex for XDG autostart compatibility.
