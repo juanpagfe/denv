@@ -29,10 +29,7 @@ exec --no-startup-id xss-lock --transfer-sleep-lock -- i3lock --nofork
 exec --no-startup-id nm-applet
 
 # Configure a Compose key using Right Alt for special characters.
-#exec --no-startup-id setxkbmap -option compose:ralt
-
-# Allow dragging floating windows with $mod + mouse.
-floating_modifier $mod
+exec --no-startup-id sh -c "setxkbmap -layout us -model pc105 -variant altgr-intl -option compose:ralt,terminate:ctrl_alt_bksp"
 
 # Launch terminal with $mod+Return.
 bindsym $mod+Return exec i3-sensible-terminal
