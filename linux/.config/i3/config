@@ -28,9 +28,6 @@ exec --no-startup-id xss-lock --transfer-sleep-lock -- i3lock --nofork
 # Start nm-applet for network management.
 exec --no-startup-id nm-applet
 
-# Configure a Compose key using Right Alt for special characters.
-exec --no-startup-id sh -c "setxkbmap -layout us -model pc105 -variant altgr-intl -option compose:ralt,terminate:ctrl_alt_bksp"
-
 # Launch terminal with $mod+Return.
 bindsym $mod+Return exec i3-sensible-terminal
 
@@ -156,10 +153,10 @@ bindsym Ctrl+Print exec --no-startup-id maim | xclip -selection clipboard -t ima
 bindsym Ctrl+$mod+Print exec --no-startup-id maim --window $(xdotool getactivewindow) | xclip -selection clipboard -t image/png
 bindsym Ctrl+Shift+Print exec --no-startup-id maim --select | xclip -selection clipboard -t image/png
 
+# Configure a Compose key using Right Alt for special characters.
+exec --no-startup-id $HOME/.config/i3/setupkb.sh
+
 # Set up screen layout and wallpaper.
-exec --no-startup-id sh -c 'xrandr --query | grep -E "HDMI.* connected" && xrandr --output eDP-1 --mode 1920x1200 --pos 1920x0 --rotate normal --output HDMI-1 --primary --mode 1920x1080 --pos 0x60 --rotate normal --output DP-1 --off --output DP-2 --off || xrandr --output eDP-1 --primary --mode 1920x1200 --pos 0x0 --rotate normal --output HDMI-1 --off --output DP-1 --off --output DP-2 --off'
-exec --no-startup-id sh -c 'feh --bg-scale ~/Pictures/background.jpg'
+exec --no-startup-id $HOME/.config/i3/startup.sh
 
 # Hide mouse cursor after 1 second of inactivity.
-exec --no-startup-id unclutter --timeout 1
-
