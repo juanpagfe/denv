@@ -29,7 +29,6 @@ for screen in "${!screen_workspaces[@]}"; do
         # Move the workspace to the specified screen
         i3-msg workspace $workspace
         i3-msg move workspace to output $screen
-        sleep 0.5
     done
 done
 
