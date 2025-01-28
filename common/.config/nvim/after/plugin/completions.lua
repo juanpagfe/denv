@@ -12,6 +12,10 @@ cmp.setup({
     mapping = cmp.mapping.preset.insert({
         ["<Tab>"] = cmp.mapping(function(fallback)
             if cmp.visible() then
+                local entry = cmp.get_selected_entry()
+                if entry then
+                    vim.api.nvim_put({entry.completion_item.label}, 'c', true, true)
+                end
                 cmp.select_next_item()
             elseif luasnip.expand_or_jumpable() then
                 luasnip.expand_or_jump()
@@ -51,3 +55,4 @@ cmp.setup({
         { name = 'buffer' },
     }),
 })
+
