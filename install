@@ -5,11 +5,20 @@ if command -v apt-get >/dev/null; then
 
     sudo apt-get install rsync avahi-utils dnsutils net-tools ripgrep fzf maim \
         xdotool xclip neofetch zsh rofi i3 i3status alacritty network-manager \
-        make gcc build-essential wkhtmltopdf unclutter-xfixes bear
+        make gcc build-essential wkhtmltopdf unclutter-xfixes bear vim neovim \
+        tmux roshi
 
     if [ ! -d "$HOME/.oh-my-zsh" ]; then
 	    sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
     fi
+
+    # Install packer
+    git clone --depth 1 https://github.com/wbthomason/packer.nvim\
+    ~/.local/share/nvim/site/pack/packer/start/packer.nvim
+
+
+    # Install common theme
+    wget -O $ZSH_CUSTOM/themes/common.zsh-theme https://raw.githubusercontent.com/jackharrisonsherlock/common/master/common.zsh-theme
 fi
 
 if command -v brew >/dev/null; then
