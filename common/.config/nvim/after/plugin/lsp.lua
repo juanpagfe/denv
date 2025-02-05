@@ -37,6 +37,13 @@ lspconfig.clangd.setup({
   end,
 })
 
+
+lspconfig.groovyls.setup({
+    cmd = { "groovy-language-server" },
+    filetypes = { "groovy", "Jenkinsfile" },  -- Ensure Jenkinsfile is recognized
+    root_dir = lspconfig.util.root_pattern("Jenkinsfile", ".git"),
+})
+
 lspconfig.rust_analyzer.setup({
     settings = {
         ["rust-analyzer"] = {
