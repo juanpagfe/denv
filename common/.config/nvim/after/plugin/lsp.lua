@@ -38,11 +38,20 @@ lspconfig.clangd.setup({
 })
 
 
-lspconfig.groovyls.setup({
-    cmd = { "groovy-language-server" },
-    filetypes = { "groovy", "Jenkinsfile" },  -- Ensure Jenkinsfile is recognized
+
+lspconfig.groovyls.setup {
+    cmd = { "groovy-language-server" }, -- Or the full path if not in PATH
+    filetypes = { "groovy", "Jenkinsfile" },
     root_dir = lspconfig.util.root_pattern("Jenkinsfile", ".git"),
-})
+    on_attach = function()
+        vim.diagnostic.config({
+            virtual_text = {
+                prefix = "● ",-- Customize the prefix
+            },
+            severity_sort = true,
+        })
+    end,
+}
 
 lspconfig.rust_analyzer.setup({
     settings = {
