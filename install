@@ -6,7 +6,7 @@ if command -v apt-get >/dev/null; then
     sudo apt-get install rsync avahi-utils dnsutils net-tools ripgrep fzf maim \
         xdotool xclip neofetch zsh rofi i3 i3status alacritty network-manager \
         make gcc build-essential wkhtmltopdf unclutter-xfixes bear vim neovim \
-        tmux roshi ruby-dev
+        tmux roshi ruby-dev polybar
 
     if [ ! -d "$HOME/.oh-my-zsh" ]; then
 	    sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
@@ -19,6 +19,20 @@ if command -v apt-get >/dev/null; then
 
     # Install common theme
     wget -O $ZSH_CUSTOM/themes/common.zsh-theme https://raw.githubusercontent.com/jackharrisonsherlock/common/master/common.zsh-theme
+
+
+    # Install MESLO NerdFonts
+    sudo apt install fontconfig
+    cd /tmp
+    wget https://github.com/ryanoasis/nerd-fonts/releases/download/v2.1.0/Meslo.zip
+    mkdir -p ~/.local/share/fonts
+    unzip Meslo.zip -d ~/.local/share/fonts
+    rm Meslo.zip
+    cd -
+    cd ~/.local/share/fonts
+    rm *Windows*
+    cd -
+    fc-cache -fv
 fi
 
 if command -v brew >/dev/null; then

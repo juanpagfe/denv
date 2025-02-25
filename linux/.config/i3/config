@@ -13,7 +13,7 @@
 set $mod Mod4
 
 # Set the font for window titles and i3bar.
-font pango:monospace 14px
+font pango:Meslo LGM Nerd Font 14px
 
 # Remove borders from windows and set custom border size and color for focused windows.
 for_window [class="^.*"] border pixel 2
