@@ -18,7 +18,6 @@ else
     declare -A workspace_apps=(
         ["1"]="alacritty"
         ["2"]="google-chrome"
-        ["3"]="obsidian"
     )
 fi
 
@@ -41,3 +40,8 @@ for workspace in "${!workspace_apps[@]}"; do
     # Add a brief delay to ensure the application launches in the correct workspace
     sleep 0.5
 done
+
+set +e
+setxkbmap -layout us -model pc105 -variant altgr-intl -option compose:ralt,terminate:ctrl_alt_bksp
+xinput set-button-map 12 1 2 3 4 5 6 7 0 0 10 11 12
+set -e

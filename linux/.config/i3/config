@@ -109,9 +109,6 @@ bindsym $mod+Shift+c reload
 # Restart i3 inplace with $mod+Shift+r.
 bindsym $mod+Shift+r restart
 
-# Exit i3 with a warning dialog using $mod+Shift+e.
-bindsym $mod+Shift+e exec "i3-nagbar -t warning -m 'You pressed the exit shortcut. Do you really want to exit i3? This will end your X session.' -b 'Yes, exit i3' 'i3-msg exit'"
-
 # Enter "resize" mode with $mod+r.
 mode "resize" {
         bindsym h resize shrink width 5 px or 5 ppt
@@ -135,6 +132,10 @@ bar {
         tray_output primary
 }
 
+exec --no-startup-id nm-applet      # Network manager tray icon
+exec --no-startup-id blueman-applet # Bluetooth manager tray icon
+bindsym $mod+Shift+e exec ~/.config/i3/power-menu.sh
+
 # Custom key bindings for audio and brightness control.
 bindsym XF86AudioMute exec amixer -D pulse set Master 1+ toggle
 bindsym XF86AudioLowerVolume exec amixer sset 'Master' 5%-
@@ -153,10 +154,7 @@ bindsym Ctrl+Print exec --no-startup-id maim | xclip -selection clipboard -t ima
 bindsym Ctrl+$mod+Print exec --no-startup-id maim --window $(xdotool getactivewindow) | xclip -selection clipboard -t image/png
 bindsym Ctrl+Shift+Print exec --no-startup-id maim --select | xclip -selection clipboard -t image/png
 
-# Configure a Compose key using Right Alt for special characters.
-exec --no-startup-id $HOME/.config/i3/setupkb.sh
-
 # Set up screen layout and wallpaper.
 exec --no-startup-id $HOME/.config/i3/startup.sh
+exec_always --no-startup-id feh --bg-scale $HOME/.config/backgrounds/background1.webp
 
-# Hide mouse cursor after 1 second of inactivity.
