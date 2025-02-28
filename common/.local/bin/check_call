@@ -1,0 +1,28 @@
+#!/bin/bash
+
+# Check if microphone is in use (PulseAudio)
+is_mic_in_use() {
+    pactl list source-outputs | grep -q "Source Output"
+    return $?
+}
+
+# Check if webcam is in use
+is_webcam_in_use() {
+    fuser /dev/video* &>/dev/null
+    return $?
+}
+
+# Run checks
+is_mic_in_use
+mic_active=$?
+
+is_webcam_in_use
+cam_active=$?
+
+# Output results
+if [[ $mic_active -eq 0 || $cam_active -eq 0 ]]; then
+    echo "Linux is in a call or video call."
+else
+    echo "No active call detected."
+fi
+

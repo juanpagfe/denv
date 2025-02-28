@@ -65,3 +65,5 @@ vim.opt.colorcolumn = "80"
 vim.g.mapleader = " "
 
 vim.g.netrw_banner = 0
+
+vim.opt.guicursor = "n-v-c:block,i-ci-ve:ver25,r-cr:hor20,o:hor50"

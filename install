@@ -6,7 +6,7 @@ if command -v apt-get >/dev/null; then
     sudo apt-get install rsync avahi-utils dnsutils net-tools ripgrep fzf maim \
         xdotool xclip neofetch zsh rofi i3 i3status alacritty network-manager \
         make gcc build-essential wkhtmltopdf unclutter-xfixes bear vim neovim \
-        tmux roshi ruby-dev stow feh
+        tmux roshi ruby-dev stow feh pulseaudio-utils
 
     if [ ! -d "$HOME/.oh-my-zsh" ]; then
 	    sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
