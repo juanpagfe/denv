@@ -67,3 +67,10 @@ vim.g.mapleader = " "
 vim.g.netrw_banner = 0
 
 vim.opt.guicursor = "n-v-c:block,i-ci-ve:ver25,r-cr:hor20,o:hor50"
+
+vim.diagnostic.config({
+  virtual_text = true,  -- Show inline messages
+  signs = true,         -- Show signs in the gutter
+  underline = true,     -- Underline problematic code
+})
+

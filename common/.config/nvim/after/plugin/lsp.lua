@@ -17,12 +17,38 @@ masonlsp.setup_handlers {
     end,
 }
 
-
 lsp_defaults.capabilities = vim.tbl_deep_extend(
   'force',
   lsp_defaults.capabilities,
   cmpnvimlsp.default_capabilities()
 )
+
+lspconfig.pylyzer.setup({
+  settings = {
+    python = {
+      checkOnType = false,   -- Reduce false positives
+      diagnostics = true,
+    },
+  },
+})
+
+local function get_python_path()
+  local venv = vim.fn.getenv("VIRTUAL_ENV") -- Get virtual environment path
+  if venv and venv ~= vim.NIL then
+    return venv .. "/bin/python3" -- Use virtual environment Python
+  else
+    return vim.fn.exepath("python3") -- Fallback to system Python
+  end
+end
+
+-- Pyright LSP setup
+lspconfig.pyright.setup({
+  settings = {
+    python = {
+      pythonPath = get_python_path(),
+    }
+  }
+})
 
 lspconfig.clangd.setup({
   on_attach = function(client, bufnr)
