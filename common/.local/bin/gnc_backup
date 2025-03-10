@@ -5,6 +5,7 @@ export GNUCASH_PATH=~/OneDrive/2Areas/Accounting/gnucash
 # Backup gnucash current state
 filename=$(date +'%Y%m%d%H%M%S').zip
 cd $GNUCASH_PATH
+dconf dump /org/gnucash/ > gnucash.dconf
 zip -r $GNUCASH_PATH/../backup/$filename .
 cd -
 cd $GNUCASH_PATH/../backup

@@ -74,3 +74,9 @@ vim.diagnostic.config({
   underline = true,     -- Underline problematic code
 })
 
+
+vim.g.loaded_python3_provider = 0
+vim.g.loaded_node_provider = 0
+vim.g.loaded_perl_provider = 0
+vim.opt.lazyredraw = true
+
