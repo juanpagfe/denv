@@ -23,7 +23,7 @@ for_window [class="^.*"] client.focused #77dd77 #285577 #ffffff #2e9ef4 #285577
 exec --no-startup-id dex --autostart --environment i3
 
 # Use xss-lock to handle screen locking before suspend.
-exec --no-startup-id xss-lock --transfer-sleep-lock -- i3lock --nofork
+exec --no-startup-id xss-lock --transfer-sleep-lock -- i3lock -e --color 000000 --show-failed-attempts --nofork
 
 # Start nm-applet for network management.
 exec --no-startup-id nm-applet

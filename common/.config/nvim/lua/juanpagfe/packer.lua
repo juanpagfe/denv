@@ -44,6 +44,18 @@ return require('packer').startup(function(use)
         "rafamadriz/friendly-snippets"
     }
     use {
-        "folke/trouble.nvim"
+        "folke/trouble.nvim",
+        cmd = "TroubleToggle", -- Lazy load when command is run
+        requires = { "nvim-tree/nvim-web-devicons" },
+        config = function()
+            vim.api.nvim_create_autocmd("User", {
+                pattern = "PackerLoad",
+                callback = function(args)
+                    if args.data == "folke/trouble.nvim" then
+                        require("config.lazy.trouble").setup()
+                    end
+                end,
+            })
+        end
     }
 end)
