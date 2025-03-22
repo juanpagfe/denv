@@ -10,19 +10,20 @@ return {
         "hrsh7th/cmp-cmdline",
         "hrsh7th/nvim-cmp",
         "L3MON4D3/LuaSnip",
-        "saadparwaiz1/cmp_luasnip"
+        "saadparwaiz1/cmp_luasnip",
+        "windwp/nvim-ts-autotag"
     },
     config = function()
         require("conform").setup({
             formatters_by_ft = {
             }
         })
-        local mason = require("mason")
-        local masonlsp = require("mason-lspconfig")
         local lspconfig = require("lspconfig")
         local cmp_nvim_lsp = require("cmp_nvim_lsp")
 
-        mason.setup()
+        require('nvim-ts-autotag').setup()
+
+        require("mason").setup()
 
         -- Update LSP capabilities for completion
         local capabilities = vim.tbl_deep_extend(
@@ -31,7 +32,7 @@ return {
             cmp_nvim_lsp.default_capabilities()
         )
 
-        masonlsp.setup({
+        require("mason-lspconfig").setup({
             ensure_installed = { "lua_ls", "solargraph" },
             handlers = {
                 function(server_name) -- default handler (optional)
@@ -98,6 +99,18 @@ return {
                 end
             end,
         })
+
+        -- TypeScript/JavaScript (TSX/JSX)
+        lspconfig.ts_ls.setup {}
+
+        -- HTML
+        lspconfig.html.setup {}
+
+        -- CSS
+        lspconfig.cssls.setup {}
+
+        -- JSON
+        lspconfig.jsonls.setup {}
 
         lspconfig.groovyls.setup({
             cmd = { "groovy-language-server" },
@@ -233,8 +246,8 @@ return {
                 { name = 'nvim_lsp' },
                 { name = 'luasnip' },
             }, {
-                { name = 'buffer' },
-            }),
+                    { name = 'buffer' },
+                }),
         })
     end,
 }
