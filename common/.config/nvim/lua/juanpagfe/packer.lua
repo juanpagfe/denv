@@ -8,6 +8,7 @@ return require('packer').startup(function(use)
     use 'wbthomason/packer.nvim'
     use "folke/tokyonight.nvim"
     use('nvim-treesitter/nvim-treesitter', { run = ':TSUpdate' })
+    use "windwp/nvim-ts-autotag"
     use('mbbill/undotree')
     use('tpope/vim-fugitive')
     use('lewis6991/gitsigns.nvim')
@@ -42,20 +43,5 @@ return require('packer').startup(function(use)
         "L3MON4D3/LuaSnip",
         "saadparwaiz1/cmp_luasnip",
         "rafamadriz/friendly-snippets"
-    }
-    use {
-        "folke/trouble.nvim",
-        cmd = "TroubleToggle", -- Lazy load when command is run
-        requires = { "nvim-tree/nvim-web-devicons" },
-        config = function()
-            vim.api.nvim_create_autocmd("User", {
-                pattern = "PackerLoad",
-                callback = function(args)
-                    if args.data == "folke/trouble.nvim" then
-                        require("config.lazy.trouble").setup()
-                    end
-                end,
-            })
-        end
     }
 end)

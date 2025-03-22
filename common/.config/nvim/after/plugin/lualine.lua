@@ -1,4 +1,7 @@
-require('lualine').setup {
+if vim.g.lualine_loaded then return end
+vim.g.lualine_loaded = true
+
+require('lualine').setup({
   options = {
     icons_enabled = true,
     theme = 'auto',
@@ -14,8 +17,7 @@ require('lualine').setup {
     globalstatus = false,
     refresh = {
       statusline = 100,
-      tabline = 100,
-      winbar = 100,
+      tabline = 500
     }
   },
   sections = {
@@ -35,7 +37,7 @@ require('lualine').setup {
     lualine_z = {}
   },
   tabline = {},
-  winbar = {},
-  inactive_winbar = {},
+  winbar = nil,
+  inactive_winbar = nil,
   extensions = {}
-}
+})

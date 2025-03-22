@@ -32,6 +32,12 @@ lspconfig.pylyzer.setup({
   },
 })
 
+lspconfig.ts_ls.setup({})
+
+lspconfig.emmet_ls.setup({
+    filetypes = { "html", "javascriptreact", "typescriptreact" }
+})
+
 local function get_python_path()
   local venv = vim.fn.getenv("VIRTUAL_ENV") -- Get virtual environment path
   if venv and venv ~= vim.NIL then
@@ -153,3 +159,11 @@ vim.diagnostic.config({
     },
 })
 
+lspconfig.eslint.setup({
+    on_attach = function(client, bufnr)
+        vim.api.nvim_create_autocmd("BufWritePre", {
+            buffer = bufnr,
+            command = "EslintFixAll",
+        })
+    end,
+})

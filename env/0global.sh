@@ -52,9 +52,6 @@ alias t='touch'
 #Close terminal
 alias e='exit'
 
-#Bring to foreground a background job
-alias f='fg'
-
 #History+grep shortcut
 alias hs='history | grep'
 
@@ -73,7 +70,6 @@ alias poweroff='sudo /sbin/poweroff'
 alias halt='sudo /sbin/halt'
 alias shutdown='sudo /sbin/shutdown'
 
-alias v='nvim'
 tmux=$(which tmux)
 alias tmux="$tmux -2"
 
