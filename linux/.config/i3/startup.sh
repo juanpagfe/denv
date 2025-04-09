@@ -9,14 +9,14 @@ if xrandr --query | grep -qE "HDMI.* connected"; then
         ["HDMI-1"]="1 2"
     )
     declare -A workspace_apps=(
-        ["1"]="alacritty"
+        ["1"]="ghostty"
         ["2"]="google-chrome"
     )
 else
     xrandr --output eDP-1 --primary --mode 1920x1200 --pos 0x0 --rotate normal --output HDMI-1 --off --output DP-1 --off --output DP-2 --off
     declare -A screen_workspaces=()
     declare -A workspace_apps=(
-        ["1"]="alacritty"
+        ["1"]="ghostty"
         ["2"]="google-chrome"
     )
 fi
