@@ -3,7 +3,7 @@
 feh --bg-scale ~/Pictures/background.jpg
 
 if xrandr --query | grep -qE "HDMI.* connected"; then
-    xrandr --output eDP-1 --mode 1920x1200 --pos 1920x0 --rotate normal --output HDMI-1 --primary --mode 1920x1080 --pos 0x60 --rotate normal --output DP-1 --off --output DP-2 --off
+    xrandr --output eDP-1-1 --mode 3072x1920 --scale 0.7x0.7 --pos 1920x0 --rotate normal --output HDMI-1-1 --primary --mode 1920x1080 --pos 0x0 --rotate normal --output DP-1-1 --off --output DP-1-2 --off
     declare -A screen_workspaces=(
         ["DP-1"]="10"
         ["HDMI-1"]="1 2"
@@ -13,7 +13,7 @@ if xrandr --query | grep -qE "HDMI.* connected"; then
         ["2"]="google-chrome"
     )
 else
-    xrandr --output eDP-1 --primary --mode 1920x1200 --pos 0x0 --rotate normal --output HDMI-1 --off --output DP-1 --off --output DP-2 --off
+    xrandr --output eDP-1-1 --mode 3072x1920 --scale 0.7x0.7 --pos 0x0 --rotate normal --output HDMI-1-1 --off --output DP-1 --off --output DP-2 --off
     declare -A screen_workspaces=()
     declare -A workspace_apps=(
         ["1"]="ghostty"
