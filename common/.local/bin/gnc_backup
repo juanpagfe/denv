@@ -6,9 +6,9 @@ export GNUCASH_PATH=~/Sync/gnucash
 filename=$(date +'%Y%m%d%H%M%S').zip
 cd $GNUCASH_PATH
 dconf dump /org/gnucash/ > gnucash.dconf
-zip -r $GNUCASH_PATH/../backup/$filename .
+zip -r $GNUCASH_PATH/backup/$filename .
 cd -
-cd $GNUCASH_PATH/../backup
+cd $GNUCASH_PATH/backup
 
 # Delete old files and only left the last 5
 newest_files=($(ls -t | head -n 5))
