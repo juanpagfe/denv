@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export GNUCASH_PATH=~/OneDrive/2Areas/Accounting/gnucash
+export GNUCASH_PATH=~/Sync/gnucash
 
 # Backup gnucash current state
 filename=$(date +'%Y%m%d%H%M%S').zip
