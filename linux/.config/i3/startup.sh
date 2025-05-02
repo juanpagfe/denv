@@ -43,6 +43,6 @@ for workspace in "${!workspace_apps[@]}"; do
 done
 
 set +e
-setxkbmap -layout us -model pc105 -variant altgr-intl -option compose:ralt,terminate:ctrl_alt_bksp
-xinput set-button-map 12 1 2 3 4 5 6 7 0 0 10 11 12
+#setxkbmap -layout us -model pc105 -variant altgr-intl -option compose:ralt,terminate:ctrl_alt_bksp
+#xinput set-button-map 12 1 2 3 4 5 6 7 0 0 10 11 12
 set -e

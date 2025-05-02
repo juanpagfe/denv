@@ -35,7 +35,7 @@ fi
 
 alias lsiptables='sudo iptables -L -n -v'
 
-setxkbmap -layout us -model pc105 -variant altgr-intl -option compose:ralt,terminate:ctrl_alt_bksp
+#setxkbmap -layout us -model pc105 -variant altgr-intl -option compose:ralt,terminate:ctrl_alt_bksp
 
 ###############################################################################################
 #                                                                                             #
