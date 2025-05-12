@@ -96,7 +96,7 @@ function rt() {
 function sethome() {
 #    if pgrep -x "i3" > /dev/null
 #    then
-    xrandr --output eDP-1 --mode 3072x1920 --scale 0.7x0.7 --pos 1920x0 --rotate normal --output HDMI-1 --primary --mode 1920x1080 --pos 0x0 --rotate normal
+    xrandr --output eDP-1-1 --mode 3072x1920 --scale 0.7x0.7 --pos 1920x0 --rotate normal --output HDMI-1-1 --primary --mode 1920x1080 --pos 0x0 --rotate normal
 #    else
 #        echo "i3 is not running"
 #    fi
@@ -106,7 +106,7 @@ function sethome() {
 function setalone() {
 #    if pgrep -x "i3" > /dev/null
 #    then
-    xrandr --output eDP-1 --mode 3072x1920 --scale 0.7x0.7 --pos 0x0 --rotate normal --output HDMI-1 --off --output DP-1 --off
+    xrandr --output eDP-1-1 --mode 3072x1920 --scale 0.7x0.7 --pos 0x0 --rotate normal --output HDMI-1-1 --off --output DP-1 --off
 #    else
 #        echo "i3 is not running"
 #    fi

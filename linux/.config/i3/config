@@ -11,6 +11,7 @@
 
 # Set the Mod key to the Windows (Super) key.
 set $mod Mod4
+floating_modifier $mod
 
 # Set the font for window titles and i3bar.
 font pango:Meslo LGM Nerd Font 14px
@@ -27,6 +28,8 @@ exec --no-startup-id xss-lock --transfer-sleep-lock -- i3lock -e --color 000000 
 
 # Start nm-applet for network management.
 exec --no-startup-id nm-applet
+
+set $term /snap/bin/ghostty
 
 # Launch terminal with $mod+Return.
 bindsym $mod+Return exec i3-sensible-terminal
@@ -158,3 +161,6 @@ bindsym Ctrl+Shift+Print exec --no-startup-id maim --select | xclip -selection c
 exec --no-startup-id $HOME/.config/i3/startup.sh
 exec_always --no-startup-id feh --bg-fill $HOME/.config/backgrounds/background1.webp
 
+# Launch default apps
+assign [class="ghostty"] 1
+assign [class="google-chrome"] 2
