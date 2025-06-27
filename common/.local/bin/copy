@@ -14,7 +14,7 @@ elif [ $# -gt 0 ]; then
     if [ -f "$1" ]; then
         value=$(cat "$1")
     else
-        echo "Error: $file is not a valid file."
+        echo "Error: $1 is not a valid file."
         usage
         exit 1
     fi
