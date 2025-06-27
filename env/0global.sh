@@ -112,7 +112,7 @@ function setalone() {
 #    fi
 }
 
-# Cats environment files
+# Display environment configuration files
 function catenv() {
   if [ -z "$1" ]; then
     cat /etc/envrc
