@@ -5,7 +5,7 @@ usage() {
 }
 
 if [[ -z "$1" || -d "$1" ]]; then
-    echo "The name of the project is empty or already exist on the current directory"
+    echo "The name of the project is empty or already exists in the current directory"
     usage
     exit 1
 else
