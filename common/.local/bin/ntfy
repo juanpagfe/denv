@@ -1,0 +1,135 @@
+#!/bin/bash
+
+URL="https://ntfy.juan-pablo.net"
+TITLE="Alert"
+PRIORITY="default"
+PRIORITIES=("urgent" "high" "default" "low" "min")
+EMOJIS=("+1" "-1" "tada" "heavy_check_mark" "loudspeaker" "rotating_light" "warning" "facepalm")
+EMOJI=""
+TAGS=""
+TOPICS=("all" "work")
+TOPIC="all"
+MESSAGE=""
+ENABLE_MD=1
+SCHEDULE=""
+CCOMMAND="curl "
+VALID_OPTIONS=(-e --emojis -h --help -m --message -M --enable-md -p --priority -s --schedule -t --title -T --topic)
+NTFY_TOKEN_FILE=~/.config/ntfy_token
+
+usage() {
+    echo "-------------------------------------------------"
+    echo "This is a small ntfy client"
+    echo "Usage 1: $0 <Message>"
+    echo "Usage 2: <Command> | $0"
+    echo "Usage 3: $0 [OPTIONS]"
+    echo
+    echo "Options:"
+    (IFS=", "; echo "  -e, --emoji      Emoji for the title (${EMOJIS[*]}, default: empty).")
+    (IFS=", "; echo "  -h, --help       Shows this help message.")
+    (IFS=", "; echo "  -m, --message    Message to transmit")
+    (IFS=", "; echo "  -M, --enable-md  Enable markdown formatting (default: FALSE).")
+    (IFS=", "; echo "  -p, --priority   Specify the priority (${PRIORITIES[*]}, default: $PRIORITY).")
+    (IFS=", "; echo "  -s, --schedule   Set schedule (e.g.: At: tomorrow, 10am; In: 30min).")
+    (IFS=", "; echo "  -t, --title      Title of the message (default: $TITLE)")
+    (IFS=", "; echo "  -T, --topic      Set topic (${TOPICS[*]}, default: $TOPIC).")
+    echo "-------------------------------------------------"
+    echo
+    exit 1
+}
+
+not_in_array() {
+    local val="$1"; shift
+    for item; do [[ "$item" == "$val" ]] && return 1; done
+    return 0
+}
+
+#Checks if the arguments are valid
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -e|--emoji)
+            if not_in_array "$2" "${EMOJIS[@]}"; then
+                echo "Emoji not valid."
+                usage
+            fi
+            EMOJI="$2"
+            shift 2
+            ;;
+        -h|--help)
+            usage
+            ;;
+        -m|--message)
+            MESSAGE=""
+            shift
+            while [[ $# -gt 0 && ! "$1" =~ ^- ]]; do
+                MESSAGE+="$1 "
+                shift
+            done
+            continue
+            ;;
+        -M|--enable-md)
+            ENABLE_MD=0
+            shift 1
+            ;;
+        -p|--priority)
+            if not_in_array "$2" "${PRIORITIES[@]}"; then
+                echo "Priority is not valid."
+                usage
+            fi
+            PRIORITY="$2"
+            shift 2
+            ;;
+        -s|--schedule)
+            shift
+            while [[ $# -gt 0 && ! "$1" =~ ^- ]]; do
+                SCHEDULE+="$1 "
+                shift
+            done
+            continue
+            ;;
+        -t|--title)
+            TITLE=""
+            shift
+            while [[ $# -gt 0 && ! "$1" =~ ^- ]]; do
+                TITLE+="$1 "
+                shift
+            done
+            continue
+            ;;
+        -T|--topic)
+            if not_in_array "$2" "${TOPICS[@]}"; then
+                echo "Topic is not valid."
+                usage
+            fi
+            TOPIC="$2"
+            shift 2
+            ;;
+        --)
+            shift
+            break
+            ;;
+        -*)
+            echo "Invalid option: $1"
+            usage
+            ;;
+        *)
+            MESSAGE+="$1 "
+            shift 1
+            ;;
+    esac
+done
+
+if ! cat $NTFY_TOKEN_FILE > /dev/null 2>&1 || [ ! -s $NTFY_TOKEN_FILE ]; then
+    echo "You need to add a valid token to $NTFY_TOKEN_FILE"
+    usage
+fi
+
+CCOMMAND+=" -H \"Title: $TITLE\""
+[ -n "$EMOJI" ] && CCOMMAND+=" -H \"Tags: $EMOJI\""
+[ -n "$SCHEDULE" ] && CCOMMAND+=" -H \"$SCHEDULE\""
+[ $ENABLE_MD -eq 0 ] && CCOMMAND+=" -H \"Markdown: yes\""
+CCOMMAND+=" -H \"Priority: $PRIORITY\""
+CCOMMAND+=" -H \"Authorization: Bearer $(cat $NTFY_TOKEN_FILE)\""
+CCOMMAND+=" -d \"$MESSAGE\""
+CCOMMAND+=" $URL/$TOPIC"
+
+eval $CCOMMAND
