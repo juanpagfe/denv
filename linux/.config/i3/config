@@ -162,5 +162,5 @@ exec --no-startup-id $HOME/.config/i3/startup.sh
 exec_always --no-startup-id feh --bg-fill $HOME/.config/backgrounds/background1.webp
 
 # Launch default apps
-assign [class="ghostty"] 1
-assign [class="google-chrome"] 2
+assign [class="ghostty"] 2
+assign [class="google-chrome"] 1
