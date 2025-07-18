@@ -29,11 +29,11 @@ cp rc/.* ~/
 
 
 #Copy bin
-if [ ! -d ~/.local ]; then
-    mkdir ~/.local
+if [ ! -d ~/.local/bin ]; then
+    mkdir -p ~/.local/bin
 fi
-mkdir -p ~/.local/bin
-cp -r common/.local/bin/* ~/.local/bin
+
+cp -f common/.local/bin/* ~/.local/bin
 
 #Merge environment files
 if [ ! -f envrc ]; then

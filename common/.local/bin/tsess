@@ -2,15 +2,25 @@
 
 TMUX_PATH="$HOME/.config/tmux" 
 FZFDIRS="$TMUX_PATH/fzfdirs" 
+COMMAND="list"
+VALID_COMMANDS=("list" "add" "drop" "session")
+NAMED=""
 
 usage() {
     echo "This is an implementation of a tmux-sessionizer with dynamic folders"
     echo "Usage: $0 [options] <argument>"
     echo "Options:"
     echo "  -h, --help             Show this help message"
-    echo "  -a, --add <directory>  Directory to add for the fzf"
+    echo "  -a, --add  <directory> Directory to add for the fzf"
+    echo "  -n, --name <name>      Name of the session"
     echo "  -l, --list             List directories to fzf"
     echo "  -d, --drop             Drop a directory"
+}
+
+not_in_array() {
+    local val="$1"; shift
+    for item; do [[ "$item" == "$val" ]] && return 1; done
+    return 0
 }
 
 list_dirs() {
@@ -63,17 +73,22 @@ has_session() {
 }
 
 sessionizer() {
-    if [[ $# -eq 1 ]]; then
-        selected=$1
+    if [[ -z $NAMED ]]; then
+        if [[ $# -eq 1 ]]; then
+            selected=$1
+        else
+            selected=$(cat "$FZFDIRS" | xargs -I {} bash -c 'find $(eval echo {}) -mindepth 1 -maxdepth 1 -type d' | fzf)
+        fi
+        selected_name=$(basename "$selected" | tr . _)
     else
-        selected=$(cat "$FZFDIRS" | xargs -I {} bash -c 'find $(eval echo {}) -mindepth 1 -maxdepth 1 -type d' | fzf)
+        selected="~"
+        read -rp "Session name: " selected_name
     fi
 
     if [[ -z $selected ]]; then
         exit 0
     fi
 
-    selected_name=$(basename "$selected" | tr . _)
     tmux_running=$(pgrep tmux)
 
     if [[ -z $TMUX ]] && [[ -z $tmux_running ]]; then
@@ -88,22 +103,24 @@ sessionizer() {
     switch_to $selected_name
 }
 
+#Checks if command exists
+COMMAND="$1"
+if [[ -z "$COMMAND" ]]; then
+    usage
+fi
+shift
+
+#Checks if command is valid
+if not_in_array "$COMMAND" "${VALID_COMMANDS[@]}"; then
+    (IFS=", "; log_error "Unexpected command '$COMMAND' (Valid: ${VALID_COMMANDS[*]}).")
+    usage
+fi
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        -a|--add)
-            add_dir $2
-            shift 2
-            exit 0
-            ;;
-        -l|--list)
-            list_dirs
-            shift
-            exit 0
-            ;;
-        -d|--drop)
-            drop_dir
-            shift
-            exit 0
+        -n|--named)
+            NAMED="1"
+            shift 1
             ;;
         -h|--help)
             usage
@@ -117,4 +134,19 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
-sessionizer $@
+
+if [[ "$COMMAND" == "add" ]]; then
+    add_dir $1
+fi
+
+if [[ "$COMMAND" == "drop" ]]; then
+    drop_dir $1
+fi
+
+if [[ "$COMMAND" == "list" ]]; then
+    list_dirs
+fi
+
+if [[ "$COMMAND" == "session" ]]; then
+    sessionizer $@
+fi
