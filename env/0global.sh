@@ -70,6 +70,7 @@ alias reboot='sudo /sbin/reboot'
 alias poweroff='sudo /sbin/poweroff'
 alias halt='sudo /sbin/halt'
 alias shutdown='sudo /sbin/shutdown'
+alias stayup='xset s off -dpms'
 
 tmux=$(which tmux)
 alias tmux="$tmux -2"
