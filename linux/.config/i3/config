@@ -39,6 +39,7 @@ bindsym $mod+Shift+q kill
 
 # Launch Rofi application launcher with $mod+d.
 bindsym $mod+d exec --no-startup-id rofi -show drun -show-icons -lines 5 -columns 3 -eh 2 -width 50 -padding 200 -opacity "40"
+bindsym $mod+s exec --no-startup-id rofi -show run
 
 # Change focus between containers using $mod+h/j/k/l.
 bindsym $mod+h focus left
@@ -72,9 +73,9 @@ bindsym $mod+v split v
 bindsym $mod+f fullscreen toggle
 
 # Change container layout to stacking, tabbed, or toggle split.
-bindsym $mod+s layout stacking
-bindsym $mod+w layout tabbed
-bindsym $mod+e layout toggle split
+#bindsym $mod+s layout stacking
+#bindsym $mod+w layout tabbed
+#bindsym $mod+e layout toggle split
 
 # Toggle between tiling and floating for the focused container.
 bindsym $mod+Shift+space floating toggle
@@ -160,7 +161,3 @@ bindsym Ctrl+Shift+Print exec --no-startup-id maim --select | xclip -selection c
 # Set up screen layout and wallpaper.
 exec --no-startup-id $HOME/.config/i3/startup.sh
 exec_always --no-startup-id feh --bg-fill $HOME/.config/backgrounds/background1.webp
-
-# Launch default apps
-assign [class="ghostty"] 2
-assign [class="google-chrome"] 1

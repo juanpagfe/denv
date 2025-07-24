@@ -77,6 +77,8 @@ alias tmux="$tmux -2"
 
 alias apt="sudo apt-get"
 
+alias vim='nvim'
+
 ###############################################################################################
 #                                                                                             #
 #                                       GLOBAL FUNCTIONS                                      #
