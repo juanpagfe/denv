@@ -39,7 +39,6 @@ bindsym $mod+Shift+q kill
 
 # Launch Rofi application launcher with $mod+d.
 bindsym $mod+d exec --no-startup-id rofi -show drun -show-icons -lines 5 -columns 3 -eh 2 -width 50 -padding 200 -opacity "40"
-bindsym $mod+s exec --no-startup-id rofi -show run
 
 # Change focus between containers using $mod+h/j/k/l.
 bindsym $mod+h focus left
@@ -138,6 +137,8 @@ bar {
 
 exec --no-startup-id nm-applet      # Network manager tray icon
 exec --no-startup-id blueman-applet # Bluetooth manager tray icon
+exec --no-startup-id /usr/lib/policykit-1-gnome/polkit-gnome-authentication-agent-1
+
 bindsym $mod+Shift+e exec ~/.config/i3/power-menu.sh
 
 # Custom key bindings for audio and brightness control.
