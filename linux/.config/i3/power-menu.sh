@@ -1,11 +1,13 @@
 #!/bin/bash
-chosen=$(echo -e " Poweroff\n Restart\n Logout" | rofi -dmenu -i -p "System")
 
+chosen=$(echo -e " Poweroff\n Restart\n Logout" | dmenu -l 3 -i -p "System")
+
+# Exit if no option was selected
 if [[ -z "$chosen" ]]; then
     exit 0
 fi
 
-confirm=$(echo -e "No\nYes" | rofi -dmenu -p "Are you sure?")
+confirm=$(echo -e "No\nYes" | dmenu -l 2 -i -p "Are you sure?")
 
 if [[ "$confirm" == "Yes" ]]; then
     case "$chosen" in

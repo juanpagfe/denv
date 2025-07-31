@@ -14,7 +14,7 @@ set $mod Mod4
 floating_modifier $mod
 
 # Set the font for window titles and i3bar.
-font pango:Meslo LGM Nerd Font 14px
+font pango:Meslo LGM Nerd Font 11px
 
 # Remove borders from windows and set custom border size and color for focused windows.
 for_window [class="^.*"] border pixel 1
@@ -29,17 +29,24 @@ exec --no-startup-id xss-lock --transfer-sleep-lock -- i3lock -e --color 000000 
 # Start nm-applet for network management.
 exec --no-startup-id nm-applet
 
-set $term /snap/bin/ghostty
+#set $term /usr/bin/wezterm
+
+#set $term wezterm
+#bindsym $mod+Return exec $term
 
 # Launch terminal with $mod+Return.
 bindsym $mod+Return exec i3-sensible-terminal
+#bindsym $mod+Return exec /usr/bin/wezterm
 
 # Close the focused window with $mod+Shift+q.
 bindsym $mod+Shift+q kill
 
 # Launch Rofi application launcher with $mod+d.
-bindsym $mod+d exec --no-startup-id rofi -show drun -show-icons -lines 5 -columns 3 -eh 2 -width 50 -padding 200 -opacity "40"
-bindsym $mod+s exec --no-startup-id show -show run -lines 5 -columns 3 -eh 2 -width 50 -padding 200 -opacity "40"
+#bindsym $mod+d exec --no-startup-id rofi -show drun -show-icons -lines 5 -columns 3 -eh 2 -width 50 -padding 200 -opacity "40"
+#bindsym $mod+s exec --no-startup-id show -show run -lines 5 -columns 3 -eh 2 -width 50 -padding 200 -opacity "40"
+#bindsym $mod+d exec --no-startup-id dmenu_run -fn "Fira Code-10" -nb "#1e1e2e" -nf "#cdd6f4" -sb "#89b4fa" -sf "#1e1e2e" -l 10
+bindsym $mod+d exec --no-startup-id ~/.config/i3/dmenu-app-launcher.sh
+bindsym $mod+s exec --no-startup-id ~/.config/i3/dmenu-pkexec.sh
 
 # Change focus between containers using $mod+h/j/k/l.
 bindsym $mod+h focus left
@@ -131,7 +138,7 @@ bindsym $mod+r mode "resize"
 
 # Configure i3bar with default settings.
 bar {
-        position bottom
+        position top
         status_command i3status
         tray_output primary
 }
