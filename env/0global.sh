@@ -21,6 +21,7 @@ export PATH=$PATH:/usr/local/go/bin
 export PATH=$PATH:/home/jpgarcia/.cargo/bin
 export XDG_DATA_DIRS="/var/lib/flatpak/exports/share:/home/jpgarcia/.local/share/flatpak/exports/share:$XDG_DATA_DIRS"
 export TERM=xterm-256color
+export MANPAGER="nvim +Man!"
 
 export MACHINE=$(get_machine)
 
