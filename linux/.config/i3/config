@@ -169,4 +169,4 @@ bindsym Ctrl+Shift+Print exec --no-startup-id maim --select | xclip -selection c
 
 # Set up screen layout and wallpaper.
 exec --no-startup-id $HOME/.config/i3/startup.sh
-exec_always --no-startup-id feh --bg-fill $HOME/.config/backgrounds/background1.webp
+exec_always --no-startup-id feh --bg-fill $HOME/.config/backgrounds/background1.png
