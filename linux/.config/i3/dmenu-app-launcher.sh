@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Get all .desktop entries
-apps=$(find /usr/share/applications ~/.local/share/applications -name "*.desktop" 2>/dev/null)
+apps=$(find /usr/share/applications ~/.local/share/applications ~/.local/share/flatpak/exports/share/applications /var/lib/flatpak/exports/share/applications -name "*.desktop" 2>/dev/null)
 
 # Parse names and commands
 choices=$(while IFS= read -r desktop; do
@@ -16,8 +16,7 @@ done <<< "$apps" | sort)
 selected=$(echo "$choices" | cut -d'#' -f1 | dmenu -i -l 10 -p "Run:")
 
 # Extract command
-cmd=$(echo "$choices" | grep "^$selected###" | cut -d'#' -f4-)
+cmd=$(echo "$choices" | grep -F "$selected###" | cut -d'#' -f2- | cut -d'#' -f2)
 
 # Run if not empty
-echo "$cmd"
-[[ -n "$cmd" ]] && eval "$cmd" &
+[[ -n "$cmd" ]] && nohup bash -c "$cmd" >/dev/null 2>&1 &
