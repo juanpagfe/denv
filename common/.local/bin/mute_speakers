@@ -1,0 +1,11 @@
+#!/bin/bash
+
+# Mute the speakers when headset is plugged in
+pactl list short sinks | grep -i "Speaker" | awk '{print $2}' | while read -r sink; do
+  pactl set-sink-mute $(echo $sink | cut -d' ' -f1) 1
+done
+
+# Unmute the speakers when headset is unplugged
+pactl list short sinks | grep -i "Speaker" | awk '{print $2}' | while read -r sink; do
+  pactl set-sink-mute $(echo $sink | cut -d' ' -f1) 0
+done

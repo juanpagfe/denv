@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# Check if HDMI is connected
+HDMI_STATUS=$(xrandr | grep "HDMI-1" | grep -woi 'connected')
+echo $(xrandr | grep "HDMI-1")
+echo $(xrandr | grep "HDMI-1" | grep -woi 'connected')
+echo $(xrandr | grep "HDMI-1" | grep -woi 'disconnected')
+
+if [ "$HDMI_STATUS" == "connected" ]; then
+    # If HDMI is connected, set up dual monitors
+    xrandr --output eDP-1 --mode 2560x1600 --pos 1920x0 --rotate normal --output HDMI-1 --primary --mode 1920x1080 --pos 0x116 --rotate normal --output DP-1 --off --output DP-2 --off
+else
+    # If HDMI is unplugged, set up single monitor
+    xrandr --output eDP-1 --primary --mode 2560x1600 --pos 0x0 --rotate normal --output HDMI-1 --off --output DP-1 --off --output DP-2 --off
+fi

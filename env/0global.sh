@@ -76,9 +76,9 @@ alias stayup='xset s off -dpms'
 tmux=$(which tmux)
 alias tmux="$tmux -2"
 
-alias apt="sudo apt-get"
-
 alias vim='nvim'
+alias prime-run='env __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia'
+alias nano='nvim'
 
 ###############################################################################################
 #                                                                                             #
