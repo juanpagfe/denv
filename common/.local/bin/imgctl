@@ -1,0 +1,114 @@
+#!/bin/bash
+
+usage() {
+  echo "Usage: $0 [options]"
+  echo "Options:"
+  echo "  -h, --help            Show this help message"
+  echo "  -m, --mount <file>    Mount an IMG"
+  echo "  -u, --umount <file>   Umount an IMG"
+}
+
+if [ $# -eq 0 ]; then
+  echo "You have to provide arguments."
+  usage
+  exit 1
+fi
+
+function verify_img() {
+    if [[ -z "$IMG" || ! -f "$IMG" ]]; then
+        echo "Error: file not found → $IMG"
+        usage
+    fi
+
+    # Ensure extension is .img
+    if [[ "$IMG" != *.img ]]; then
+        echo "Error: only raw .img files are supported (not .gz, .xz, etc.)"
+        usage
+    fi
+}
+
+function mount() {
+    NAME=$(basename "$IMG")
+    NAME="${NAME%.*}"
+    MNT="/mnt/$NAME"
+
+    # Prevent remount if already mounted
+    if mountpoint -q "$MNT"; then
+        echo "$MNT is already mounted."
+        exit 0
+    fi
+
+    # Detect root partition offset
+    SECTOR_START=$(fdisk -l "$IMG" | awk '/Linux/ {print $2; exit}')
+    SECTOR_SIZE=$(fdisk -l "$IMG" | awk '/Sector size/ {print $4; exit}')
+    OFFSET=$((SECTOR_START * SECTOR_SIZE))
+
+    # Create mount dir
+    sudo mkdir -p "$MNT"
+
+    # Mount image
+    echo "Mounting $IMG at $MNT (offset=$OFFSET)"
+    sudo mount -o loop,offset=$OFFSET "$IMG" "$MNT"
+
+    # Bind system dirs (optional, useful for chroot)
+    for d in dev proc sys; do
+        sudo mount --bind /$d "$MNT/$d"
+    done
+
+    echo "Mounted successfully at $MNT"
+}
+
+function umount() {
+    NAME=$(basename "$IMG")
+    NAME="${NAME%.*}" MNT="/mnt/$NAME"
+
+    # Check if mounted
+    if ! mountpoint -q "$MNT"; then
+        echo "$MNT is not mounted."
+        exit 0
+    fi
+
+    echo "Unmounting system dirs..."
+    for d in sys proc dev; do
+        if mountpoint -q "$MNT/$d"; then
+            sudo umount "$MNT/$d"
+        fi
+    done
+
+    echo "Unmounting main partition..."
+    sudo umount "$MNT"
+
+    echo "Unmounted successfully"
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -h|--help)
+            usage
+            shift
+            ;;
+        -m|--mount)
+            IMG="$2"
+            verify_img
+            mount
+            shift 2
+            exit 0
+            ;;
+        -u|--umount)
+            IMG="$2"
+            verify_img
+            umount
+            shift 2
+            exit 0
+            ;;
+        --)
+            shift
+            break
+            ;;
+        *)
+            echo "Invalid option: $1."
+            usage
+            exit 1
+            ;;
+    esac
+done
