@@ -7,7 +7,7 @@ if command -v apt-get >/dev/null; then
         xdotool xclip neofetch zsh dmenu rofi i3 i3status network-manager \
         policykit-1-gnome make gcc build-essential wkhtmltopdf \
         unclutter-xfixes bear vim tmux ruby-dev stow feh pulseaudio-utils \
-        fd-find catimg
+        fd-find catimg meld
 
     # Rust
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
