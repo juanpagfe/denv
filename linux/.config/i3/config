@@ -30,6 +30,8 @@ exec --no-startup-id xss-lock --transfer-sleep-lock -- i3lock -e --color 000000 
 exec --no-startup-id nm-applet
 exec --no-startup-id volumeicon
 
+for_window [class="gnome-calculator"] floating enable
+
 #set $term /usr/bin/wezterm
 
 #set $term wezterm
@@ -172,3 +174,5 @@ bindsym Ctrl+Shift+Print exec --no-startup-id maim --select | xclip -selection c
 exec --no-startup-id $HOME/.config/i3/startup.sh
 exec --no-startup-id picom --config ~/.config/picom.conf
 exec_always --no-startup-id feh --bg-fill $HOME/.config/backgrounds/background1.png
+exec_always --no-startup-id $HOME/.local/bin/keyboard-layout-listener.sh
+exec --no-startup-id /home/jp/Applications/Nextcloud.AppImage
