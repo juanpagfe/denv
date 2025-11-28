@@ -79,6 +79,7 @@ alias tmux="$tmux -2"
 alias vim='nvim'
 alias prime-run='env __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia'
 alias nano='nvim'
+alias aptupgrade='sudo apt update && sudo apt upgrade -y && sudo apt autoremove -y'
 
 ###############################################################################################
 #                                                                                             #
