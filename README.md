@@ -31,8 +31,7 @@ Run the install script from the repository root:
 ```
 
 The script detects the platform and installs required packages via `apt-get` or
-`brew`. It will also fetch the `oh-my-zsh` framework, download fonts and copy
-all configuration files to your home directory.
+`brew`.
 
 Once completed you can source `/etc/envrc` from your shell (`.bashrc`, `zshrc`,
 etc.) to enable the provided aliases and functions:

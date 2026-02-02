@@ -15,9 +15,17 @@ config.window_padding = {
   bottom = 0,
 }
 
+config.font = wezterm.font_with_fallback {
+  { family = "JetBrains Mono", weight = "Medium" },
+}
+
 -- or, changing the font size and color scheme.
 config.font_size = 11
-config.color_scheme = 'Afterglow'
+config.color_scheme = "Tokyo Night"
+
+config.term = "wezterm"
+config.scrollback_lines = 100000
+config.audible_bell = "Disabled"
 
 -- Finally, return the configuration to wezterm:
 return config

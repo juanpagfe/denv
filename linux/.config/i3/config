@@ -30,16 +30,14 @@ exec --no-startup-id xss-lock --transfer-sleep-lock -- i3lock -e --color 000000 
 exec --no-startup-id nm-applet
 exec --no-startup-id volumeicon
 
+for_window [window_role="pop-up"] floating enable
+for_window [window_type="dialog"] floating enable
 for_window [class="gnome-calculator"] floating enable
+for_window [class="Pavucontrol"] floating enable
+for_window [class="Blueman-manager"] floating enable
 
-#set $term /usr/bin/wezterm
-
-#set $term wezterm
-#bindsym $mod+Return exec $term
-
-# Launch terminal with $mod+Return.
-bindsym $mod+Return exec i3-sensible-terminal
-#bindsym $mod+Return exec /usr/bin/wezterm
+set $term wezterm start --always-new-process
+bindsym $mod+Return exec --no-startup-id $term
 
 # Close the focused window with $mod+Shift+q.
 bindsym $mod+Shift+q kill
