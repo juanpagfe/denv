@@ -1,6 +1,6 @@
 general {
 	colors = true
-	interval = 3
+	interval = 1
 	color_good = "#989898"
 	color_degraded = "#8c7f22"
 	color_bad = "#be2422"
@@ -9,22 +9,22 @@ general {
 order += "wireless _first_"
 wireless _first_ {
     format_up = " 📶%quality » %essid "
-    format_down = ""
+        format_down = ""
 }
 
 order += "ethernet _first_"
 ethernet _first_ {
-	format_up = "🔌 "
+	format_up = "🔌"
 	format_down = ""
 }
 
 order += "battery all"
 battery all {
 	format = "%status %percentage %remaining"
-    status_chr = "⚡"
-    status_bat = "🔋"
-    status_low = "⚠️"
+	status_chr = "⚡"
+	status_bat = "🔋"
     status_unk = "🔌"
+    status_full = "🔌"
 	low_threshold = 11
 	threshold_type = percentage
 	integer_battery_capacity = true
