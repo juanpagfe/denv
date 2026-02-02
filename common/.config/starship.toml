@@ -3,7 +3,7 @@ add_newline = true
 format = "($jobs)$directory$git_branch$git_status\n$character"
 
 [directory]
-style = "green"
+style = "bold blue"
 format = "[$path]($style) "
 truncation_length = 0
 truncate_to_repo = false

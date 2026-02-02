@@ -15,8 +15,11 @@ if command -v apt-get >/dev/null; then
     # Starship
     curl -sS https://starship.rs/install.sh | sh
 
-    # Install common theme
-    wget -O $ZSH_CUSTOM/themes/common.zsh-theme https://raw.githubusercontent.com/jackharrisonsherlock/common/master/common.zsh-theme
+    mkdir -p ~/.zsh
+    curl -o ~/.zsh/zsh-history-substring-search.zsh \
+         https://raw.githubusercontent.com/zsh-users/zsh-history-substring-search/master/zsh-history-substring-search.zsh
+
+    source ~/.zsh/zsh-history-substring-search.zsh
 
 
     # Install MESLO NerdFonts

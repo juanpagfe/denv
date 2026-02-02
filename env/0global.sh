@@ -45,6 +45,9 @@ setxkbmap -layout us -model pc105 -variant altgr-intl -option compose:ralt,termi
 #                                                                                             #
 ###############################################################################################
 
+
+alias ls='ls --color=auto'
+
 #Clear terminal and change directory to home
 alias c='clear'
 
