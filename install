@@ -12,14 +12,12 @@ if command -v apt-get >/dev/null; then
     # Rust
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
-    # Starship
-    curl -sS https://starship.rs/install.sh | sh
+    if [ ! -d "$HOME/.oh-my-zsh" ]; then
+	    sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+    fi
 
-    mkdir -p ~/.zsh
-    curl -o ~/.zsh/zsh-history-substring-search.zsh \
-         https://raw.githubusercontent.com/zsh-users/zsh-history-substring-search/master/zsh-history-substring-search.zsh
-
-    source ~/.zsh/zsh-history-substring-search.zsh
+    # Install common theme
+    wget -O $ZSH_CUSTOM/themes/common.zsh-theme https://raw.githubusercontent.com/jackharrisonsherlock/common/master/common.zsh-theme
 
 
     # Install MESLO NerdFonts
