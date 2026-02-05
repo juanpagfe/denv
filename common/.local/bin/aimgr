@@ -13,15 +13,21 @@ usage() {
 }
 
 list_apps() {
-    apps=($(ls "$CONF_DIR" 2>/dev/null))
-    if [ ${#apps[@]} -eq 0 ]; then echo "No apps managed by aimgr."; return; fi
+    # Check if directory is empty
+    if [ -z "$(ls -A "$CONF_DIR" 2>/dev/null)" ]; then
+        echo "No apps managed by aimgr."
+        return
+    fi
 
-    printf "%-20s | %-10s\n" "App Name" "Scope"
-    echo "------------------------------------"
-    for log in "${apps[@]}"; do
-        DATA=$(cat "$CONF_DIR/$log")
+    printf "%-25s | %-10s\n" "App Name" "Scope"
+    echo "---------------------------------------"
+    
+    # Using find with -print0 and while read -d '' to handle spaces safely
+    find "$CONF_DIR" -maxdepth 1 -name "*.log" -print0 | while IFS= read -r -d '' log_path; do
+        log_file=$(basename "$log_path")
+        DATA=$(cat "$log_path")
         IFS='|' read -r EXE DS SCOPE <<< "$DATA"
-        printf "%-20s | %-10s\n" "${log%.log}" "$SCOPE"
+        printf "%-25s | %-10s\n" "${log_file%.log}" "$SCOPE"
     done
 }
 
@@ -39,17 +45,14 @@ install_app() {
         exit 1
     fi
 
-    # 1. Ask for Custom Name
     DEFAULT_NAME=$(basename "$APP_PATH" .AppImage)
     read -p "Enter App Name [$DEFAULT_NAME]: " CUSTOM_NAME
     NAME="${CUSTOM_NAME:-$DEFAULT_NAME}"
 
-    # 2. Ask for Category
     DEFAULT_CAT="Utility"
-    read -p "Enter Category (e.g., Development, Game, Network) [$DEFAULT_CAT]: " CUSTOM_CAT
+    read -p "Enter Category [$DEFAULT_CAT]: " CUSTOM_CAT
     CATEGORY="${CUSTOM_CAT:-$DEFAULT_CAT}"
 
-    # 3. Ask for Scope
     echo "Select Scope:"
     select scope in "User" "System"; do
         case $scope in
@@ -59,13 +62,12 @@ install_app() {
     done
 
     mkdir -p "$BIN" "$APP"
+    # Quote the TARGET variable to handle spaces in the name
     TARGET="$BIN/$NAME.AppImage"
 
-    # Copy and Permissions
     $S cp "$APP_PATH" "$TARGET"
     $S chmod +x "$TARGET"
 
-    # Create Desktop Entry
     DESC="$APP/$NAME.desktop"
     cat <<EOF | $S tee "$DESC" > /dev/null
 [Desktop Entry]
@@ -77,25 +79,37 @@ Terminal=false
 Categories=$CATEGORY;
 EOF
 
-    # Refresh Desktop Database
     if [[ "$scope" == "User" ]]; then
         update-desktop-database "$APP" 2>/dev/null
     else
         sudo update-desktop-database "$APP" 2>/dev/null
     fi
 
+    # Crucial: Quote the log filename
     echo "$TARGET|$DESC|$scope" > "$CONF_DIR/$NAME.log"
-    echo "Successfully installed $NAME under $CATEGORY at $(date +%H:%M)."
+    echo "Successfully installed $NAME at $(date +%H:%M)."
 }
 
 uninstall_app() {
-    apps=($(ls "$CONF_DIR" 2>/dev/null))
-    [[ ${#apps[@]} -eq 0 ]] && echo "Nothing to uninstall." && exit 0
+    # Populate a temporary array safely
+    local apps=()
+    while IFS= read -r -d '' file; do
+        apps+=("$(basename "$file")")
+    done < <(find "$CONF_DIR" -maxdepth 1 -name "*.log" -print0)
+
+    if [ ${#apps[@]} -eq 0 ]; then
+        echo "Nothing to uninstall."
+        exit 0
+    fi
 
     echo "Select the app to remove:"
+    # Bash select also struggles with spaces in arrays unless handled carefully
     select log in "${apps[@]}"; do
         if [[ -n "$log" ]]; then
-            IFS='|' read -r EXE DS SCOPE <<< $(cat "$CONF_DIR/$log")
+            # Quote the file expansion here
+            DATA=$(cat "$CONF_DIR/$log")
+            IFS='|' read -r EXE DS SCOPE <<< "$DATA"
+            
             S_CMD=""
             [[ "$SCOPE" == "System" ]] && S_CMD="sudo"
             
@@ -109,18 +123,9 @@ uninstall_app() {
     done
 }
 
-# Argument Handling
 case "$1" in
-    -i|--install)
-        install_app "$2"
-        ;;
-    -u|--uninstall)
-        uninstall_app
-        ;;
-    -l|--list)
-        list_apps
-        ;;
-    *)
-        usage
-        ;;
+    -i|--install) install_app "$2" ;;
+    -u|--uninstall) uninstall_app ;;
+    -l|--list) list_apps ;;
+    *) usage ;;
 esac
