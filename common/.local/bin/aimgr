@@ -1,0 +1,126 @@
+#!/bin/bash
+
+# Configuration
+CONF_DIR="$HOME/.config/aimgr"
+mkdir -p "$CONF_DIR"
+
+usage() {
+    echo "Usage: aimgr [options]"
+    echo "  -i, --install [file]  Install AppImage (optional: path to file)"
+    echo "  -u, --uninstall       Remove AppImage"
+    echo "  -l, --list            List installed"
+    exit 1
+}
+
+list_apps() {
+    apps=($(ls "$CONF_DIR" 2>/dev/null))
+    if [ ${#apps[@]} -eq 0 ]; then echo "No apps managed by aimgr."; return; fi
+
+    printf "%-20s | %-10s\n" "App Name" "Scope"
+    echo "------------------------------------"
+    for log in "${apps[@]}"; do
+        DATA=$(cat "$CONF_DIR/$log")
+        IFS='|' read -r EXE DS SCOPE <<< "$DATA"
+        printf "%-20s | %-10s\n" "${log%.log}" "$SCOPE"
+    done
+}
+
+install_app() {
+    local APP_PATH="$1"
+
+    if [[ -z "$APP_PATH" ]]; then
+        read -e -p "Path to AppImage: " APP_PATH
+    fi
+
+    APP_PATH="${APP_PATH/#\~/$HOME}"
+
+    if [[ ! -f "$APP_PATH" ]]; then 
+        echo "Error: File '$APP_PATH' not found!"
+        exit 1
+    fi
+
+    # 1. Ask for Custom Name
+    DEFAULT_NAME=$(basename "$APP_PATH" .AppImage)
+    read -p "Enter App Name [$DEFAULT_NAME]: " CUSTOM_NAME
+    NAME="${CUSTOM_NAME:-$DEFAULT_NAME}"
+
+    # 2. Ask for Category
+    DEFAULT_CAT="Utility"
+    read -p "Enter Category (e.g., Development, Game, Network) [$DEFAULT_CAT]: " CUSTOM_CAT
+    CATEGORY="${CUSTOM_CAT:-$DEFAULT_CAT}"
+
+    # 3. Ask for Scope
+    echo "Select Scope:"
+    select scope in "User" "System"; do
+        case $scope in
+            "User" ) BIN="$HOME/.local/bin"; APP="$HOME/.local/share/applications"; S=""; break;;
+            "System" ) BIN="/usr/local/bin"; APP="/usr/share/applications"; S="sudo"; break;;
+        esac
+    done
+
+    mkdir -p "$BIN" "$APP"
+    TARGET="$BIN/$NAME.AppImage"
+
+    # Copy and Permissions
+    $S cp "$APP_PATH" "$TARGET"
+    $S chmod +x "$TARGET"
+
+    # Create Desktop Entry
+    DESC="$APP/$NAME.desktop"
+    cat <<EOF | $S tee "$DESC" > /dev/null
+[Desktop Entry]
+Type=Application
+Name=$NAME
+Exec="$TARGET"
+Icon=utilities-terminal
+Terminal=false
+Categories=$CATEGORY;
+EOF
+
+    # Refresh Desktop Database
+    if [[ "$scope" == "User" ]]; then
+        update-desktop-database "$APP" 2>/dev/null
+    else
+        sudo update-desktop-database "$APP" 2>/dev/null
+    fi
+
+    echo "$TARGET|$DESC|$scope" > "$CONF_DIR/$NAME.log"
+    echo "Successfully installed $NAME under $CATEGORY at $(date +%H:%M)."
+}
+
+uninstall_app() {
+    apps=($(ls "$CONF_DIR" 2>/dev/null))
+    [[ ${#apps[@]} -eq 0 ]] && echo "Nothing to uninstall." && exit 0
+
+    echo "Select the app to remove:"
+    select log in "${apps[@]}"; do
+        if [[ -n "$log" ]]; then
+            IFS='|' read -r EXE DS SCOPE <<< $(cat "$CONF_DIR/$log")
+            S_CMD=""
+            [[ "$SCOPE" == "System" ]] && S_CMD="sudo"
+            
+            $S_CMD rm -f "$EXE" "$DS"
+            rm "$CONF_DIR/$log"
+            echo "Removed ${log%.log}."
+            break
+        else
+            echo "Invalid selection."
+        fi
+    done
+}
+
+# Argument Handling
+case "$1" in
+    -i|--install)
+        install_app "$2"
+        ;;
+    -u|--uninstall)
+        uninstall_app
+        ;;
+    -l|--list)
+        list_apps
+        ;;
+    *)
+        usage
+        ;;
+esac
