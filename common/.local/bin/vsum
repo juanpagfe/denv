@@ -1,0 +1,86 @@
+#!/usr/bin/bash
+set -euo pipefail
+
+usage() {
+  cat <<EOF
+Usage: vsum [-a algorithm] <file> <expected_hash>
+
+Algorithms:
+  sha1
+  sha224
+  sha256 (default)
+  sha384
+  sha512
+  sha3-224
+  sha3-256
+  sha3-384
+  sha3-512
+  md5
+  blake2
+
+Examples:
+  vsum file.zip <hash>
+  vsum -a sha512 file.zip <hash>
+  vsum -a sha3-256 file.zip <hash>
+EOF
+  exit 2
+}
+
+algo="sha256"
+
+# Parse args
+while getopts ":a:h" opt; do
+  case "$opt" in
+    a) algo="${OPTARG,,}" ;;
+    h) usage ;;
+    *) usage ;;
+  esac
+done
+shift $((OPTIND - 1))
+
+[[ $# -ne 2 ]] && usage
+
+file="$1"
+expected="$2"
+
+[[ ! -f "$file" ]] && {
+  echo "File not found: $file"
+  exit 2
+}
+
+# Validate + map algorithm
+case "$algo" in
+  sha1)   cmd=(sha1sum) ;;
+  sha224) cmd=(sha224sum) ;;
+  sha256) cmd=(sha256sum) ;;
+  sha384) cmd=(sha384sum) ;;
+  sha512) cmd=(sha512sum) ;;
+  sha3-224) cmd=(openssl dgst -sha3-224) ;;
+  sha3-256) cmd=(openssl dgst -sha3-256) ;;
+  sha3-384) cmd=(openssl dgst -sha3-384) ;;
+  sha3-512) cmd=(openssl dgst -sha3-512) ;;
+  md5) cmd=(md5sum) ;;
+  blake2) cmd=(b2sum) ;;
+  *)
+    echo "Invalid algorithm: $algo"
+    usage
+    ;;
+esac
+
+# Compute hash
+if [[ "${cmd[0]}" == "openssl" ]]; then
+  actual="$("${cmd[@]}" "$file" | awk '{print $NF}')"
+else
+  actual="$("${cmd[@]}" -- "$file" | awk '{print $1}')"
+fi
+
+# Compare
+if [[ "$actual" == "$expected" ]]; then
+  echo "OK"
+  exit 0
+else
+  echo "FAILED"
+  echo "expected: $expected"
+  echo "actual:   $actual"
+  exit 1
+fi
