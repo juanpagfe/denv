@@ -11,6 +11,7 @@ TOPICS=("all" "work")
 TOPIC="all"
 MESSAGE=""
 ENABLE_MD=1
+VERBOSE=0
 SCHEDULE=""
 CCOMMAND="curl "
 VALID_OPTIONS=(-e --emojis -h --help -m --message -M --enable-md -p --priority -s --schedule -t --title -T --topic)
@@ -32,6 +33,7 @@ usage() {
     (IFS=", "; echo "  -s, --schedule   Set schedule (e.g.: At: tomorrow, 10am; In: 30min).")
     (IFS=", "; echo "  -t, --title      Title of the message (default: $TITLE)")
     (IFS=", "; echo "  -T, --topic      Set topic (${TOPICS[*]}, default: $TOPIC).")
+    (IFS=", "; echo "  -v, --verbose    Shows result and every log")
     echo "-------------------------------------------------"
     echo
     exit 1
@@ -103,6 +105,10 @@ while [[ $# -gt 0 ]]; do
             TOPIC="$2"
             shift 2
             ;;
+        -v|--verbose)
+            VERBOSE=1
+            shift 1
+            ;;
         --)
             shift
             break
@@ -123,6 +129,10 @@ if ! cat $NTFY_TOKEN_FILE > /dev/null 2>&1 || [ ! -s $NTFY_TOKEN_FILE ]; then
     usage
 fi
 
+if [ "$VERBOSE" -eq 0 ]; then
+    CCOMMAND+="-o /dev/null -s "
+fi
+
 CCOMMAND+=" -H \"Title: $TITLE\""
 [ -n "$EMOJI" ] && CCOMMAND+=" -H \"Tags: $EMOJI\""
 [ -n "$SCHEDULE" ] && CCOMMAND+=" -H \"$SCHEDULE\""
@@ -132,4 +142,8 @@ CCOMMAND+=" -H \"Authorization: Bearer $(cat $NTFY_TOKEN_FILE)\""
 CCOMMAND+=" -d \"$MESSAGE\""
 CCOMMAND+=" $URL/$TOPIC"
 
-eval $CCOMMAND
+if [ "$VERBOSE" -eq 1 ]; then
+    eval $CCOMMAND
+else
+    eval $CCOMMAND > /dev/null
+fi
