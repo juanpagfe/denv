@@ -27,5 +27,18 @@ config.term = "wezterm"
 config.scrollback_lines = 100000
 config.audible_bell = "Disabled"
 
+config.keys = {
+}
+
+-- Loop from 1 to 9 to create tmux window switchers
+for i = 1, 9 do
+  table.insert(config.keys, {
+    key = tostring(i),
+    mods = 'ALT',
+    -- Sends Ctrl-b followed by the number
+    action = wezterm.action.SendString('\x01' .. tostring(i)),
+  })
+end
+
 -- Finally, return the configuration to wezterm:
 return config
