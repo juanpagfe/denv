@@ -91,6 +91,34 @@ alias upgrade='sudo apt update && sudo apt upgrade -y && sudo apt autoremove -y 
 #                                       GLOBAL FUNCTIONS                                      #
 #                                                                                             #
 ###############################################################################################
+ 
+if [ -n "$BASH_VERSION" ]; then
+    bind -x '"\e[24~": fzf_history_picker'   # \e[24~ = F12
+elif [ -n "$ZSH_VERSION" ]; then
+    zle -N fzf_history_picker
+    bindkey '^[[24~' fzf_history_picker   # F12
+else
+    echo "Unsupported shell"
+    return 1
+fi
+
+function fzf_history_picker() {
+    selected=$(history \
+        | awk '{$1=$2=$3=""; sub(/^ +/, ""); print}' \
+        | sed '/^$/d' \
+        | awk '!seen[$0]++' \
+        | tac \
+        | fzf --height 40% --reverse)
+
+    if [ -n "$BASH_VERSION" ]; then
+        READLINE_LINE="$selected"
+        READLINE_POINT=${#READLINE_LINE}
+    elif [ -n "$ZSH_VERSION" ]; then
+        print -z "$selected"
+    else
+        echo "Unknown shell"
+    fi
+}
 
 #Create file with random base64 content
 function crfile() {
