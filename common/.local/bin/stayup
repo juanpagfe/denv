@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+parse_duration() {
+  case "$1" in
+    *s) echo "${1%s}" ;;
+    *m) echo "$(( ${1%m} * 60 ))" ;;
+    *h) echo "$(( ${1%h} * 3600 ))" ;;
+    *) echo "Invalid duration"; exit 1 ;;
+  esac
+}
+
+if [[ $# -eq 0 ]]; then
+  # disable blanking completely
+  xset s off
+  xset -dpms
+  echo "Screen will never blank"
+  exit 0
+fi
+
+secs=$(parse_duration "$1")
+
+# set screensaver timeout
+xset s "$secs"
+xset +dpms
+
+# optional: keep DPMS slightly after screensaver
+xset dpms "$secs" "$((secs + 300))" "$((secs + 600))"
+
+echo "Screen will blank after $secs seconds of inactivity"
