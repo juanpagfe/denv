@@ -1,0 +1,253 @@
+#!/bin/bash
+set -euo pipefail
+
+DEFAULT_KEY="$HOME/.ssh/id_ed25519_work_servers"
+
+usage() {
+    cat <<EOF
+Usage: lws-bootstrap [OPTIONS] [user@]host
+
+Bootstrap SSH key-based authentication to a remote device so you can
+connect without a password.
+
+Requires at least one of the following environment variables to be set:
+  - LWS_PASS_UNACTIVATED: password for unactivated devices (tried first)
+  - LWS_PASS_ACTIVATED:   password for activated devices (fallback)
+The password is used once to copy your public key, after which
+password-free access is available.
+
+Arguments:
+  [user@]host       Target device. If user is omitted, defaults to
+                    the current user (\$USER).
+
+Options:
+  -i <key>          Path to the SSH private key to use.
+                    Default: $DEFAULT_KEY
+  -h, --help        Show this help message.
+
+Environment Variables:
+  LWS_PASS_UNACTIVATED   Password for unactivated devices (tried first).
+  LWS_PASS_ACTIVATED     Password for activated devices (fallback).
+
+Examples:
+  export LWS_PASS_UNACTIVATED="defaultpass"
+  export LWS_PASS_ACTIVATED="mypass"
+  lws-bootstrap 192.168.1.50
+  lws-bootstrap alice@myserver.local
+  lws-bootstrap -i ~/.ssh/id_ed25519_work_servers user@host
+EOF
+}
+
+# --- Parse arguments ---
+KEY="$DEFAULT_KEY"
+TARGET=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        -i)
+            if [[ -z "${2:-}" ]]; then
+                echo "Error: -i requires a key path argument."
+                exit 1
+            fi
+            KEY="$2"
+            shift 2
+            ;;
+        -*)
+            echo "Error: Unknown option '$1'"
+            usage
+            exit 1
+            ;;
+        *)
+            if [[ -n "$TARGET" ]]; then
+                echo "Error: Multiple targets specified."
+                usage
+                exit 1
+            fi
+            TARGET="$1"
+            shift
+            ;;
+    esac
+done
+
+if [[ -z "$TARGET" ]]; then
+    echo "Error: No target host specified."
+    usage
+    exit 1
+fi
+
+if [[ -z "${LWS_PASS_UNACTIVATED:-}" && -z "${LWS_PASS_ACTIVATED:-}" ]]; then
+    echo "Error: Neither LWS_PASS_UNACTIVATED nor LWS_PASS_ACTIVATED is set."
+    echo "Set at least one:"
+    echo "  export LWS_PASS_UNACTIVATED=\"your_unactivated_password\""
+    echo "  export LWS_PASS_ACTIVATED=\"your_activated_password\""
+    exit 1
+fi
+
+if ! command -v sshpass &>/dev/null; then
+    echo "Error: sshpass is not installed."
+    echo "Install it with: sudo apt install sshpass (Linux) or brew install sshpass (Mac)"
+    exit 1
+fi
+
+# If no user@ prefix, default to exxothermic
+if [[ "$TARGET" != *@* ]]; then
+    TARGET="exxothermic@$TARGET"
+fi
+
+REMOTE_USER="${TARGET%%@*}"
+REMOTE_HOST="${TARGET##*@}"
+
+# --- Key generation ---
+if [[ ! -f "$KEY" ]]; then
+    echo "SSH key not found at: $KEY"
+    read -rp "Generate a new ed25519 key? [Y/n] " answer
+    answer="${answer:-Y}"
+    if [[ "$answer" =~ ^[Yy]$ ]]; then
+        ssh-keygen -t ed25519 -f "$KEY"
+        echo ""
+    else
+        echo "Aborting: no SSH key available."
+        exit 1
+    fi
+fi
+
+# --- Determine working password ---
+PASS=""
+IS_UNACTIVATED=false
+
+if [[ -n "${LWS_PASS_UNACTIVATED:-}" ]]; then
+    echo "Trying unactivated password..."
+    if sshpass -p "$LWS_PASS_UNACTIVATED" ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 "$TARGET" true 2>/dev/null; then
+        PASS="$LWS_PASS_UNACTIVATED"
+        IS_UNACTIVATED=true
+        echo "✓ Unactivated password works."
+    else
+        echo "✗ Unactivated password failed."
+    fi
+fi
+
+if [[ -z "$PASS" && -n "${LWS_PASS_ACTIVATED:-}" ]]; then
+    echo "Trying activated password..."
+    if sshpass -p "$LWS_PASS_ACTIVATED" ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 "$TARGET" true 2>/dev/null; then
+        PASS="$LWS_PASS_ACTIVATED"
+        echo "✓ Activated password works."
+    else
+        echo "✗ Activated password failed."
+    fi
+fi
+
+if [[ -z "$PASS" ]]; then
+    echo "Error: Neither password could authenticate to $TARGET."
+    exit 1
+fi
+
+# --- Copy public key to target ---
+echo ""
+echo "Copying SSH public key to $TARGET..."
+sshpass -p "$PASS" ssh-copy-id -i "$KEY" "$TARGET"
+echo ""
+echo "✓ SSH key installed. You should now be able to connect with:"
+echo "  ssh $TARGET"
+
+# --- Install vim and copy .vimrc ---
+REMOTE_HOME="/home/$REMOTE_USER"
+if [[ "$REMOTE_USER" == "root" ]]; then
+    REMOTE_HOME="/root"
+fi
+
+echo ""
+echo "Installing vim on device..."
+ssh -i "$KEY" -o StrictHostKeyChecking=no "$TARGET" 'sudo apt install -y vim' 2>/dev/null
+
+if [[ -f "$HOME/.vimrc" ]]; then
+    echo "Copying .vimrc to $TARGET..."
+    scp -i "$KEY" "$HOME/.vimrc" "$TARGET:$REMOTE_HOME/.vimrc"
+    echo "✓ .vimrc deployed."
+else
+    echo "⚠ ~/.vimrc not found, skipping."
+fi
+
+# --- Activate unactivated devices ---
+echo ""
+echo "Checking if device is already activated..."
+if ssh -i "$KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=10 "$TARGET" '[ -f /home/exxothermic/.certificate ]' 2>/dev/null; then
+    IS_UNACTIVATED=false
+    echo "✓ Device is already activated (.certificate found)."
+else
+    IS_UNACTIVATED=true
+    echo "✗ Device is not yet activated."
+fi
+
+if $IS_UNACTIVATED; then
+    echo ""
+    echo "═══════════════════════════════════════════"
+    echo "  Device is UNACTIVATED — starting activation"
+    echo "═══════════════════════════════════════════"
+
+    # Partner selection
+    PARTNERS=("AEL" "LWS" "MHS" "MYE")
+    echo ""
+    echo "Select a partner:"
+    select PARTNER in "${PARTNERS[@]}"; do
+        if [[ -n "$PARTNER" ]]; then
+            echo "  → Partner: $PARTNER"
+            break
+        fi
+        echo "Invalid selection. Try again."
+    done
+
+    # Model arrays per partner
+    declare -a AEL_MODELS=("LW-100P-02" "LW-110-02" "LW-150P-02-D" "LW-160-02-D" "LW-210-04" "LW-200P-08" "LW-210-08" "LW-200P-12" "LW-210-12" "LW-200P-16" "LW-210-16")
+    declare -a LWS_MODELS=("LW-120-02" "LW-130-02" "LW-170-02" "LW-180-02" "LW-215-04" "LW-220-04" "LW-180-08" "LW-215-08" "LW-220-08" "LW-220-16")
+    declare -a MHS_MODELS=("LW-120-02-MH" "LW-130-02-MH" "LW-210-08-MH" "LW-215-08-MH" "LW-220-08-MH")
+    declare -a MYE_MODELS=("MX3" "MX5")
+
+    # Pick the right model list for the selected partner
+    case "$PARTNER" in
+        AEL) MODELS=("${AEL_MODELS[@]}") ;;
+        LWS) MODELS=("${LWS_MODELS[@]}") ;;
+        MHS) MODELS=("${MHS_MODELS[@]}") ;;
+        MYE) MODELS=("${MYE_MODELS[@]}") ;;
+    esac
+
+    # Model selection
+    echo ""
+    echo "Select a model for $PARTNER:"
+    select MODEL in "${MODELS[@]}"; do
+        if [[ -n "$MODEL" ]]; then
+            echo "  → Model: $MODEL"
+            break
+        fi
+        echo "Invalid selection. Try again."
+    done
+
+    # Run activation
+    PROVISIONER_DIR="/home/jp/Work/multiplied/listen/lw-provisioner-scripts/two-phases-process"
+    ACTIVATE_SCRIPT="$PROVISIONER_DIR/exxothermic-activate.sh"
+
+    if [[ ! -f "$ACTIVATE_SCRIPT" ]]; then
+        echo "Error: Activation script not found at $ACTIVATE_SCRIPT"
+        exit 1
+    fi
+
+    echo ""
+    echo "Running activation..."
+    echo "  sudo $ACTIVATE_SCRIPT $REMOTE_HOST -p $PARTNER -x $MODEL"
+    echo ""
+    cd "$PROVISIONER_DIR"
+    sudo ./exxothermic-activate.sh "$REMOTE_HOST" -p "$PARTNER" -x "$MODEL"
+
+    echo ""
+    echo "✓ Activation complete."
+else
+    echo ""
+    echo "Device is already activated."
+fi
+
+echo ""
+echo "Done! Try it out:"
+echo "  ssh $TARGET"
