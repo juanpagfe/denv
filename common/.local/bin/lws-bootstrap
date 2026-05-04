@@ -115,13 +115,29 @@ if [[ ! -f "$KEY" ]]; then
     fi
 fi
 
+# --- Remove stale host key ---
+echo "Removing any stale host key for $REMOTE_HOST..."
+ssh-keygen -f "$HOME/.ssh/known_hosts" -R "$REMOTE_HOST" 2>/dev/null || true
+
+# --- Check if key-based auth already works ---
+KEY_AUTH_OK=false
+if [[ -f "$KEY" ]]; then
+    echo "Checking if SSH key auth already works..."
+    if ssh -i "$KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o PasswordAuthentication=no "$TARGET" true 2>/dev/null; then
+        KEY_AUTH_OK=true
+        echo "✓ SSH key auth already works — skipping password authentication and key copy."
+    else
+        echo "✗ SSH key auth not yet set up."
+    fi
+fi
+
 # --- Determine working password ---
 PASS=""
 IS_UNACTIVATED=false
 
-if [[ -n "${LWS_PASS_UNACTIVATED:-}" ]]; then
+if ! $KEY_AUTH_OK && [[ -n "${LWS_PASS_UNACTIVATED:-}" ]]; then
     echo "Trying unactivated password..."
-    if sshpass -p "$LWS_PASS_UNACTIVATED" ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 "$TARGET" true 2>/dev/null; then
+    if sshpass -p "$LWS_PASS_UNACTIVATED" ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o PubkeyAuthentication=no -o PreferredAuthentications=password "$TARGET" true 2>/dev/null; then
         PASS="$LWS_PASS_UNACTIVATED"
         IS_UNACTIVATED=true
         echo "✓ Unactivated password works."
@@ -130,9 +146,9 @@ if [[ -n "${LWS_PASS_UNACTIVATED:-}" ]]; then
     fi
 fi
 
-if [[ -z "$PASS" && -n "${LWS_PASS_ACTIVATED:-}" ]]; then
+if ! $KEY_AUTH_OK && [[ -z "$PASS" && -n "${LWS_PASS_ACTIVATED:-}" ]]; then
     echo "Trying activated password..."
-    if sshpass -p "$LWS_PASS_ACTIVATED" ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 "$TARGET" true 2>/dev/null; then
+    if sshpass -p "$LWS_PASS_ACTIVATED" ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o PubkeyAuthentication=no -o PreferredAuthentications=password "$TARGET" true 2>/dev/null; then
         PASS="$LWS_PASS_ACTIVATED"
         echo "✓ Activated password works."
     else
@@ -140,18 +156,23 @@ if [[ -z "$PASS" && -n "${LWS_PASS_ACTIVATED:-}" ]]; then
     fi
 fi
 
-if [[ -z "$PASS" ]]; then
+if ! $KEY_AUTH_OK && [[ -z "$PASS" ]]; then
     echo "Error: Neither password could authenticate to $TARGET."
     exit 1
 fi
 
 # --- Copy public key to target ---
-echo ""
-echo "Copying SSH public key to $TARGET..."
-sshpass -p "$PASS" ssh-copy-id -i "$KEY" "$TARGET"
-echo ""
-echo "✓ SSH key installed. You should now be able to connect with:"
-echo "  ssh $TARGET"
+if $KEY_AUTH_OK; then
+    echo ""
+    echo "SSH key already authorized — skipping key copy."
+else
+    echo ""
+    echo "Copying SSH public key to $TARGET..."
+    sshpass -p "$PASS" ssh-copy-id -i "$KEY" "$TARGET"
+    echo ""
+    echo "✓ SSH key installed. You should now be able to connect with:"
+    echo "  ssh $TARGET"
+fi
 
 # --- Install vim and copy .vimrc ---
 REMOTE_HOME="/home/$REMOTE_USER"

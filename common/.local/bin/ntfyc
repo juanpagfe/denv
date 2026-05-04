@@ -1,8 +1,16 @@
 #!/bin/bash
 
+start_time=$SECONDS
+
 "$@"
 status=$?
 
-~/.local/bin/ntfy "CMD($status): $*"
+elapsed=$((SECONDS - start_time))
+hours=$((elapsed / 3600))
+minutes=$(( (elapsed % 3600) / 60 ))
+seconds=$((elapsed % 60))
+elapsed_fmt=$(printf "%02d:%02d:%02d" $hours $minutes $seconds)
+
+~/.local/bin/ntfy "CMD($status) [${elapsed_fmt}]: $*"
 
 exit $status
