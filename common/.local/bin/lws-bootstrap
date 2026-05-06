@@ -269,6 +269,8 @@ else
     echo "Device is already activated."
 fi
 
+ssh-keygen -f '/home/jp/.ssh/known_hosts' -R "$TARGET"
+
 echo ""
 echo "Done! Try it out:"
 echo "  ssh $TARGET"
