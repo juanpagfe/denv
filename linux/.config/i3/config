@@ -29,6 +29,7 @@ exec --no-startup-id xss-lock --transfer-sleep-lock -- i3lock -e --color 000000 
 # Start nm-applet for network management.
 exec --no-startup-id nm-applet
 exec --no-startup-id volumeicon
+exec --no-startup-id xrdb -merge ~/.Xresources
 
 for_window [window_role="pop-up"] floating enable
 for_window [window_type="dialog"] floating enable

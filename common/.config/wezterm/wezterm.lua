@@ -20,7 +20,7 @@ config.font = wezterm.font_with_fallback {
 }
 
 -- or, changing the font size and color scheme.
-config.font_size = 11
+config.font_size = 10
 config.color_scheme = "Tokyo Night"
 
 config.term = "wezterm"

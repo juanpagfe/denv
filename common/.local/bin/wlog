@@ -20,6 +20,7 @@ usage() {
     echo "  -e, --edit [filename]    Edit a file from the archive in \$EDITOR ($EDITOR) (interactive picker if omitted)"
     echo "      --show [filename]    Show a context file (interactive picker if omitted)"
     echo "  -g, --grep <pattern>     Search log entries and context files for a pattern"
+    echo "      --sync               Commit all changes in the archive and push to origin/main"
     echo "      --print              Print all logs"
     echo "      --today              With --print: show only today's log entries"
     echo "      --since <date>       With --print: show entries since <date> (e.g. '2026-05-01', 'yesterday', '3 days ago')"
@@ -179,7 +180,11 @@ load_file() {
         read -r -p "'$fname' already exists in $PWD. Overwrite? [y/N]: " CONFIRM
         case "$CONFIRM" in
             [yY]|[yY][eE][sS]) ;;
-            *) echo "Aborted."; exit 0 ;;
+            *)
+                echo "Aborted."
+                log_entry "Cancelled load of '$fname' into '$PWD' (would overwrite local copy)."
+                exit 0
+                ;;
         esac
     fi
 
@@ -202,15 +207,19 @@ remove_file() {
         target=$(pick_archive_file "remove") || exit 0
     fi
 
-    read -r -p "Are you sure you want to remove '$(basename "$target")'? [y/N]: " CONFIRM
+    local fname
+    fname=$(basename "$target")
+
+    read -r -p "Are you sure you want to remove '$fname'? [y/N]: " CONFIRM
     case "$CONFIRM" in
         [yY]|[yY][eE][sS])
             rm -f "$target"
-            echo "Removed '$(basename "$target")'."
-            log_entry "Removed file '$(basename "$target")'."
+            echo "Removed '$fname'."
+            log_entry "Removed file '$fname'."
             ;;
         *)
             echo "Aborted."
+            log_entry "Cancelled removal of '$fname'."
             ;;
     esac
 }
@@ -233,8 +242,22 @@ edit_file() {
         target=$(pick_archive_file "edit") || exit 0
     fi
 
+    local fname
+    fname=$(basename "$target")
+
+    # Capture pre-edit fingerprint (mtime + size) so we can detect real changes.
+    local before after
+    before=$(stat -c '%Y:%s' "$target" 2>/dev/null)
+
     "$EDITOR" "$target"
-    log_entry "Edited file '$(basename "$target")'."
+
+    after=$(stat -c '%Y:%s' "$target" 2>/dev/null)
+
+    if [[ "$before" != "$after" ]]; then
+        log_entry "Modified file '$fname'."
+    else
+        log_entry "Opened file '$fname' for edit (no changes)."
+    fi
 }
 
 print_logs() {
@@ -336,6 +359,54 @@ grep_all() {
     fi
 }
 
+sync_archive() {
+    if ! command -v git >/dev/null 2>&1; then
+        echo "Error: git is not installed."
+        exit 1
+    fi
+
+    cd "$WLOG_DIR" || {
+        echo "Error: cannot enter $WLOG_DIR."
+        exit 1
+    }
+
+    if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        echo "Error: $WLOG_DIR is not a git repository."
+        echo "Initialise it once with:"
+        echo "  cd $WLOG_DIR && git init -b main && git remote add origin <url>"
+        exit 1
+    fi
+
+    local stamp
+    stamp=$(timestamp)
+
+    git add -A
+
+    if git diff --cached --quiet; then
+        echo "No changes to commit."
+        log_entry "Sync: no local changes to commit."
+    else
+        if git commit -m "wlog sync: $stamp"; then
+            echo "Committed local changes."
+            log_entry "Sync: committed local changes ('wlog sync: $stamp')."
+        else
+            echo "Error: git commit failed."
+            log_entry "Sync: commit failed."
+            exit 1
+        fi
+    fi
+
+    echo "Pushing to origin/main..."
+    if git push origin main; then
+        echo "Push complete."
+        log_entry "Sync: pushed to origin/main."
+    else
+        echo "Error: git push failed."
+        log_entry "Sync: push to origin/main failed."
+        exit 1
+    fi
+}
+
 write_message() {
     local message="$1"
 
@@ -376,6 +447,9 @@ case "$1" in
         ;;
     -g|--grep)
         grep_all "$2"
+        ;;
+    --sync)
+        sync_archive
         ;;
     --print)
         SINCE=""
