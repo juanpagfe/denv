@@ -259,7 +259,7 @@ if $IS_UNACTIVATED; then
 
     echo ""
     echo "Running activation..."
-    echo "  sudo $ACTIVATE_SCRIPT $REMOTE_HOST -p $PARTNER -x $MODEL"
+    echo "  sudo $ACTIVATE_SCRIPT $REMOTE_HOST -p $PARTNER -x $MODEL -q"
     echo ""
     cd "$PROVISIONER_DIR"
     sudo ./exxothermic-activate.sh "$REMOTE_HOST" -p "$PARTNER" -x "$MODEL"
