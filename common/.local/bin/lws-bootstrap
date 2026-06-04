@@ -210,7 +210,7 @@ if $IS_UNACTIVATED; then
     echo "═══════════════════════════════════════════"
 
     # Partner selection
-    PARTNERS=("AEL" "LWS" "MHS" "MYE")
+    PARTNERS=("AEL" "APP" "LWS" "MHS" "MYE")
     echo ""
     echo "Select a partner:"
     select PARTNER in "${PARTNERS[@]}"; do
@@ -223,13 +223,15 @@ if $IS_UNACTIVATED; then
 
     # Model arrays per partner
     declare -a AEL_MODELS=("LW-100P-02" "LW-110-02" "LW-150P-02-D" "LW-160-02-D" "LW-210-04" "LW-200P-08" "LW-210-08" "LW-200P-12" "LW-210-12" "LW-200P-16" "LW-210-16")
-    declare -a LWS_MODELS=("LW-120-02" "LW-130-02" "LW-170-02" "LW-180-02" "LW-215-04" "LW-220-04" "LW-180-08" "LW-215-08" "LW-220-08" "LW-220-16")
+    declare -a LWS_MODELS=("LW-120-02" "LW-130-02" "LW-170-02" "LW-180-02" "LW-215-04" "LW-220-04" "LW-180-08" "LW-215-08" "LW-220-08" "LW-215-16" "LW-220-16")
     declare -a MHS_MODELS=("LW-120-02-MH" "LW-130-02-MH" "LW-210-08-MH" "LW-215-08-MH" "LW-220-08-MH")
     declare -a MYE_MODELS=("MX3" "MX5")
+    declare -a APP_MODELS=("MYE-100-2" "MYE-100-4" "MYE-100-8" "MYE-100-12" "MYE-100-16")
 
     # Pick the right model list for the selected partner
     case "$PARTNER" in
         AEL) MODELS=("${AEL_MODELS[@]}") ;;
+        APP) MODELS=("${APP_MODELS[@]}") ;;
         LWS) MODELS=("${LWS_MODELS[@]}") ;;
         MHS) MODELS=("${MHS_MODELS[@]}") ;;
         MYE) MODELS=("${MYE_MODELS[@]}") ;;
