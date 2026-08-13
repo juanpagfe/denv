@@ -248,6 +248,62 @@ if $IS_UNACTIVATED; then
         echo "Invalid selection. Try again."
     done
 
+    # Server selection
+    SERVERS=(
+        "services.exxothermic.com"
+        "staging.exxothermic.com"
+        "stage01.services.exxothermic.com"
+        "stage02.services.exxothermic.com"
+        "stage03.services.exxothermic.com"
+        "stage01.gears.exxothermic.com"
+        "stage02.gears.exxothermic.com"
+        "stage03.gears.exxothermic.com"
+    )
+    echo ""
+    echo "Select a server:"
+    select SERVER in "${SERVERS[@]}"; do
+        if [[ -n "$SERVER" ]]; then
+            echo "  → Server: $SERVER"
+            break
+        fi
+        echo "Invalid selection. Try again."
+    done
+
+    # --- Detect CM5 with multiple NICs for --eth1-mac ---
+    ETH1_MAC_ARGS=()
+    echo ""
+    echo "Detecting device hardware (CM5 + multi-NIC check)..."
+    IS_CM5=false
+    if ssh -i "$KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=10 "$TARGET" \
+        'grep -qi "raspberry pi 5\|bcm2712" /proc/cpuinfo 2>/dev/null || [ -f /sys/firmware/devicetree/base/model ] && grep -qi "pi 5" /sys/firmware/devicetree/base/model 2>/dev/null' 2>/dev/null; then
+        IS_CM5=true
+        echo "✓ Device identified as CM5 (Raspberry Pi 5 / BCM2712)."
+    else
+        echo "  Device is not a CM5."
+    fi
+
+    if $IS_CM5; then
+        NIC_COUNT=$(ssh -i "$KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=10 "$TARGET" \
+            'ls -d /sys/class/net/eth* 2>/dev/null | wc -l')
+        echo "  NICs detected: $NIC_COUNT"
+        if [[ "$NIC_COUNT" -gt 1 ]]; then
+            # Generate a random locally-administered unicast MAC address
+            # Byte 0: set bit 1 (locally administered) and clear bit 0 (unicast)
+            RANDOM_MAC=$(printf '%02x:%02x:%02x:%02x:%02x:%02x' \
+                $(( (RANDOM % 256) & 0xFE | 0x02 )) \
+                $((RANDOM % 256)) \
+                $((RANDOM % 256)) \
+                $((RANDOM % 256)) \
+                $((RANDOM % 256)) \
+                $((RANDOM % 256)))
+            echo "  CM5 with multiple NICs detected — assigning eth1 MAC."
+            echo "  → Generated MAC: $RANDOM_MAC"
+            ETH1_MAC_ARGS=(--eth1-mac "$RANDOM_MAC")
+        else
+            echo "  CM5 with single NIC — skipping --eth1-mac."
+        fi
+    fi
+
     # Run activation
     PROVISIONER_DIR="/home/jp/Work/multiplied/listen/lw-provisioner-scripts/two-phases-process"
     ACTIVATE_SCRIPT="$PROVISIONER_DIR/exxothermic-activate.sh"
@@ -259,10 +315,10 @@ if $IS_UNACTIVATED; then
 
     echo ""
     echo "Running activation..."
-    echo "  sudo $ACTIVATE_SCRIPT $REMOTE_HOST -p $PARTNER -x $MODEL -q"
+    echo "  sudo $ACTIVATE_SCRIPT $REMOTE_HOST -p $PARTNER -x $MODEL -q $SERVER ${ETH1_MAC_ARGS[*]:-}"
     echo ""
     cd "$PROVISIONER_DIR"
-    sudo ./exxothermic-activate.sh "$REMOTE_HOST" -p "$PARTNER" -x "$MODEL -q"
+    sudo ./exxothermic-activate.sh "$REMOTE_HOST" -p "$PARTNER" -x "$MODEL" -q "$SERVER" "${ETH1_MAC_ARGS[@]+"${ETH1_MAC_ARGS[@]}"}"
 
     echo ""
     echo "✓ Activation complete."
