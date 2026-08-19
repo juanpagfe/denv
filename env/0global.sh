@@ -28,13 +28,6 @@ export MACHINE=$(get_machine)
 #Starts an http server on the current directory (Default port: 8000)
 alias www='python3 -m http.server'
 
-#Prints current opened ports
-if [[ "$MACHINE" = "Mac" ]]; then
-    alias ports="netstat -lant | grep -E -i -w 'LISTEN|udp4|udp6'"
-else
-    alias ports='netstat -tulanp'
-fi
-
 alias lsiptables='sudo iptables -L -n -v'
 
 setxkbmap -layout us -model pc105 -variant altgr-intl -option compose:ralt,terminate:ctrl_alt_bksp

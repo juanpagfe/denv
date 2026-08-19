@@ -10,6 +10,7 @@ import json
 import os
 import re
 import select
+import shutil
 import signal
 import subprocess
 import sys
@@ -18,7 +19,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 _IS_TTY = sys.stdout.isatty() and os.environ.get("NO_COLOR") is None
 
@@ -36,6 +37,183 @@ def _dim(t):    return _color(t, "2")
 
 def _eprint(*a, **kw):
     print(*a, file=sys.stderr, **kw)
+
+# ---------------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------------
+
+_CONFIG_DIR = os.path.join(
+    os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")), "timer"
+)
+_CONFIG_PATH = os.path.join(_CONFIG_DIR, "config.yaml")
+
+_DEFAULT_CONFIG_YAML = """\
+# timer — configuration file
+# This file is auto-generated on first run. Edit freely; invalid keys are ignored.
+# CLI flags always override these defaults.
+
+# ── Notifications ──────────────────────────────────────────────────────────
+
+# Terminal bell character (\\a) on timer completion.
+bell: true
+
+# Desktop notification via notify-send (Linux) / osascript (macOS).
+desktop: true
+
+# ── Sound ──────────────────────────────────────────────────────────────────
+
+# Play an audible sound when the timer finishes.
+sound: true
+
+# Path to a custom sound file (wav, ogg, mp3).
+# Leave empty to use the system default (freedesktop "complete" theme sound).
+# Example: sound_file: ~/Music/alerts/bell.ogg
+sound_file: ""
+
+# Sound player command override. If empty, auto-detected (paplay → aplay → ffplay).
+# The sound file path is appended as the last argument.
+# Example: sound_player: mpv --no-video
+sound_player: ""
+
+# ── Display ────────────────────────────────────────────────────────────────
+
+# Suppress all terminal output (progress, completion message).
+quiet: false
+
+# ── Execution ──────────────────────────────────────────────────────────────
+
+# Default command to execute when any timer finishes.
+# Per-timer --exec flag takes precedence over this.
+# Example: exec: notify-send "Tea is ready!"
+exec: ""
+
+# ── Daemon ─────────────────────────────────────────────────────────────────
+
+# Run timers in background (daemon mode) by default.
+daemon: false
+"""
+
+_DEFAULTS = {
+    "bell": True,
+    "desktop": True,
+    "sound": True,
+    "sound_file": "",
+    "sound_player": "",
+    "quiet": False,
+    "exec": "",
+    "daemon": False,
+}
+
+
+def _ensure_config():
+    """Create the default config file if it doesn't exist. Returns True if created."""
+    if os.path.exists(_CONFIG_PATH):
+        return False
+    os.makedirs(_CONFIG_DIR, exist_ok=True)
+    with open(_CONFIG_PATH, "w") as f:
+        f.write(_DEFAULT_CONFIG_YAML)
+    return True
+
+
+def _load_config():
+    """Load config from YAML, creating defaults on first run."""
+    created = _ensure_config()
+    if created:
+        _eprint(f"  Created default config: {_CONFIG_PATH}")
+
+    try:
+        import yaml
+    except ImportError:
+        _eprint("  Warning: PyYAML not installed — using built-in defaults.")
+        return dict(_DEFAULTS)
+
+    try:
+        with open(_CONFIG_PATH) as f:
+            raw = yaml.safe_load(f)
+    except Exception as e:
+        _eprint(f"  Warning: Could not read config ({e}) — using defaults.")
+        return dict(_DEFAULTS)
+
+    if not isinstance(raw, dict):
+        return dict(_DEFAULTS)
+
+    cfg = dict(_DEFAULTS)
+    for key in _DEFAULTS:
+        if key in raw and raw[key] is not None:
+            expected_type = type(_DEFAULTS[key])
+            val = raw[key]
+            # Coerce types gently
+            if expected_type is bool and not isinstance(val, bool):
+                val = str(val).lower() in ("true", "yes", "1", "on")
+            elif expected_type is str and not isinstance(val, str):
+                val = str(val)
+            cfg[key] = val
+    return cfg
+
+
+# ---------------------------------------------------------------------------
+# Sound playback
+# ---------------------------------------------------------------------------
+
+_FREEDESKTOP_SOUNDS = [
+    "/usr/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga",
+    "/usr/share/sounds/freedesktop/stereo/complete.oga",
+    "/usr/share/sounds/freedesktop/stereo/bell.oga",
+    "/usr/share/sounds/freedesktop/stereo/message.oga",
+]
+
+
+def _find_sound_player():
+    """Auto-detect an available sound player."""
+    for cmd in ("paplay", "aplay", "ffplay"):
+        path = shutil.which(cmd)
+        if path:
+            if cmd == "ffplay":
+                return [path, "-nodisp", "-autoexit", "-loglevel", "quiet"]
+            return [path]
+    return None
+
+
+def _find_default_sound_file():
+    """Find a usable system sound file."""
+    for path in _FREEDESKTOP_SOUNDS:
+        if os.path.isfile(path):
+            return path
+    return None
+
+
+def _play_sound(cfg):
+    """Play a notification sound based on config. Best-effort, never raises."""
+    if not cfg.get("sound", False):
+        return
+
+    sound_file = cfg.get("sound_file", "")
+    if sound_file:
+        sound_file = os.path.expanduser(sound_file)
+    else:
+        sound_file = _find_default_sound_file()
+
+    if not sound_file or not os.path.isfile(sound_file):
+        return
+
+    player_override = cfg.get("sound_player", "")
+    if player_override:
+        cmd = player_override.split() + [sound_file]
+    else:
+        player = _find_sound_player()
+        if not player:
+            return
+        cmd = player + [sound_file]
+
+    try:
+        subprocess.Popen(
+            cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception:
+        pass
+
 
 # ---------------------------------------------------------------------------
 # Duration parsing
@@ -160,7 +338,7 @@ def _next_timer_id():
 # Notifications
 # ---------------------------------------------------------------------------
 
-def _notify(label, bell=True, desktop=True):
+def _notify(label, bell=True, desktop=True, cfg=None):
     """Send notification when timer finishes."""
     msg = f"Timer finished: {label}" if label else "Timer finished!"
 
@@ -176,6 +354,10 @@ def _notify(label, bell=True, desktop=True):
                           capture_output=True, timeout=5)
         except (FileNotFoundError, subprocess.TimeoutExpired):
             pass
+
+    # Sound (driven by config)
+    if cfg:
+        _play_sound(cfg)
 
 
 def _exec_command(cmd):
@@ -193,7 +375,7 @@ def _exec_command(cmd):
 # ---------------------------------------------------------------------------
 
 def _run_countdown(duration, label="", bell=True, desktop=True,
-                   exec_cmd=None, timer_id=None, quiet=False):
+                   exec_cmd=None, timer_id=None, quiet=False, cfg=None):
     """Run a countdown timer with display."""
     start_real = time.time()
     start_mono = time.monotonic()
@@ -266,8 +448,7 @@ def _run_countdown(duration, label="", bell=True, desktop=True,
     # Timer finished
     if not quiet:
         print(f"\r  ⏱  {_green('Done!')} {_format_duration(duration)}{' — ' + label if label else ''}          ")
-
-    _notify(label, bell=bell, desktop=desktop)
+        _notify(label, bell=bell, desktop=desktop, cfg=cfg)
 
     if exec_cmd:
         if not quiet:
@@ -287,7 +468,7 @@ def _run_countdown(duration, label="", bell=True, desktop=True,
 # Daemon mode
 # ---------------------------------------------------------------------------
 
-def _run_daemon(duration, label="", bell=True, desktop=True, exec_cmd=None):
+def _run_daemon(duration, label="", bell=True, desktop=True, exec_cmd=None, cfg=None):
     """Run timer in background (daemon mode)."""
     timer_id = _next_timer_id()
 
@@ -308,8 +489,54 @@ def _run_daemon(duration, label="", bell=True, desktop=True, exec_cmd=None):
     os.close(devnull)
 
     _run_countdown(duration, label=label, bell=bell, desktop=desktop,
-                   exec_cmd=exec_cmd, timer_id=timer_id, quiet=True)
+                   exec_cmd=exec_cmd, timer_id=timer_id, quiet=True, cfg=cfg)
     os._exit(0)
+
+
+# ---------------------------------------------------------------------------
+# Follow mode — run a command and report elapsed time
+# ---------------------------------------------------------------------------
+
+def _run_follow(follow_cmd, bell=True, desktop=True, exec_cmd=None,
+                quiet=False, cfg=None):
+    """Run a command, measure its duration, then fire configured notifications."""
+    label = " ".join(follow_cmd)
+    if not quiet:
+        print(f"  ⏱  Following: {_bold(label)}", flush=True)
+
+    start_mono = time.monotonic()
+    start_real = time.time()
+
+    # Run the command, inheriting stdin/stdout/stderr so the user sees output
+    try:
+        result = subprocess.run(follow_cmd)
+        exit_code = result.returncode
+    except FileNotFoundError:
+        _eprint(f"  Command not found: {follow_cmd[0]}")
+        return 127
+    except KeyboardInterrupt:
+        elapsed = time.monotonic() - start_mono
+        if not quiet:
+            print(f"\n  ⏱  {_yellow('Interrupted')} after {_bold(_format_duration(elapsed))} — {label}")
+        return 130
+
+    elapsed = time.monotonic() - start_mono
+
+    # Report results
+    if not quiet:
+        status = _green("✓") if exit_code == 0 else _red(f"✗ exit {exit_code}")
+        print(f"  ⏱  {status} {_bold(_format_duration(elapsed))} elapsed — {label}")
+
+    # Fire notifications unless quiet
+    if not quiet:
+        _notify(label, bell=bell, desktop=desktop, cfg=cfg)
+
+    if exec_cmd:
+        if not quiet:
+            print(f"  Executing: {exec_cmd}")
+        _exec_command(exec_cmd)
+
+    return exit_code
 
 
 # ---------------------------------------------------------------------------
@@ -419,10 +646,15 @@ def _build_parser(mode="sub"):
     p.add_argument("--verbose", "-v", action="store_true")
     p.add_argument("--no-bell", action="store_true", help="Disable terminal bell.")
     p.add_argument("--no-desktop", action="store_true", help="Disable desktop notification.")
+    p.add_argument("--sound", action="store_true", default=None,
+                   help="Play sound on completion (overrides config).")
+    p.add_argument("--no-sound", action="store_true", help="Disable sound on completion.")
     p.add_argument("--exec", dest="exec_cmd", default=None,
                    help="Command to run when timer finishes.")
     p.add_argument("--daemon", "-d", action="store_true",
                    help="Run timer in background (daemon mode).")
+    p.add_argument("--config", dest="show_config", action="store_true",
+                   help="Show current config path and values.")
 
     if mode == "timer":
         p.add_argument("duration", help="Timer duration (e.g. 10m, 1h30m, 2m30s).")
@@ -441,15 +673,82 @@ def _build_parser(mode="sub"):
     return p
 
 
+def _merge_config_and_args(cfg, args):
+    """Merge config defaults with CLI flag overrides. CLI flags win."""
+    # Bell: config default, --no-bell overrides
+    bell = cfg.get("bell", True)
+    if args.no_bell:
+        bell = False
+
+    # Desktop: config default, --no-desktop overrides
+    desktop = cfg.get("desktop", True)
+    if args.no_desktop:
+        desktop = False
+
+    # Sound: config default, --sound / --no-sound overrides
+    if args.no_sound:
+        cfg["sound"] = False
+    elif args.sound:
+        cfg["sound"] = True
+
+    # Quiet: config default, --quiet overrides
+    quiet = args.quiet or cfg.get("quiet", False)
+
+    # Exec: CLI --exec wins, then config default
+    exec_cmd = args.exec_cmd
+    if exec_cmd is None and cfg.get("exec"):
+        exec_cmd = cfg["exec"]
+
+    # Daemon: CLI --daemon wins, then config default
+    daemon = args.daemon or cfg.get("daemon", False)
+
+    return bell, desktop, quiet, exec_cmd, daemon
+
+
 def main():
+    # ── Split --follow before argparse sees anything ──────────────────────
+    # Everything after --follow is the command to run, not timer args.
+    follow_cmd = None
+    argv = sys.argv[1:]
+    if "--follow" in argv:
+        idx = argv.index("--follow")
+        follow_cmd = argv[idx + 1:]  # everything after --follow
+        argv = argv[:idx]            # everything before --follow
+        if not follow_cmd:
+            _eprint("Error: --follow requires a command.")
+            sys.exit(2)
+
     # Detect whether first positional arg is a subcommand or a duration
-    positionals = [a for a in sys.argv[1:] if not a.startswith("-")]
+    positionals = [a for a in argv if not a.startswith("-")]
     first_pos = positionals[0] if positionals else None
     is_timer = first_pos is not None and first_pos not in SUBCOMMANDS
 
+    # Load configuration (creates default on first run)
+    cfg = _load_config()
+
+    # Handle --config before anything else
+    if "--config" in argv:
+        print(_bold("Timer configuration"))
+        print(f"  Path: {_CONFIG_PATH}")
+        print()
+        for key, val in cfg.items():
+            default_marker = " (default)" if val == _DEFAULTS.get(key) else ""
+            print(f"  {key}: {val}{_dim(default_marker)}")
+        sys.exit(0)
+
+    # ── Follow mode ───────────────────────────────────────────────────────
+    if follow_cmd is not None:
+        # Daemon/background options are incompatible with --follow; silently ignore.
+        argv = [a for a in argv if a not in ("--daemon", "-d")]
+        parser = _build_parser(mode="sub")
+        args = parser.parse_args(argv)
+        bell, desktop, quiet, exec_cmd, _ = _merge_config_and_args(cfg, args)
+        sys.exit(_run_follow(follow_cmd, bell=bell, desktop=desktop,
+                             exec_cmd=exec_cmd, quiet=quiet, cfg=cfg))
+
     if is_timer:
         parser = _build_parser(mode="timer")
-        args = parser.parse_args()
+        args = parser.parse_args(argv)
         try:
             duration = _parse_duration(args.duration)
         except ValueError as e:
@@ -457,21 +756,20 @@ def main():
             sys.exit(2)
 
         label = args.label or ""
-        bell = not args.no_bell
-        desktop = not args.no_desktop
+        bell, desktop, quiet, exec_cmd, daemon = _merge_config_and_args(cfg, args)
 
-        if args.daemon:
+        if daemon:
             sys.exit(_run_daemon(duration, label=label, bell=bell, desktop=desktop,
-                                 exec_cmd=args.exec_cmd))
+                                 exec_cmd=exec_cmd, cfg=cfg))
         else:
-            if not args.quiet:
+            if not quiet:
                 print(f"  ⏱  Timer: {_bold(_format_duration(duration))}"
                       + (f" — {_cyan(label)}" if label else ""))
             sys.exit(_run_countdown(duration, label=label, bell=bell, desktop=desktop,
-                                    exec_cmd=args.exec_cmd, quiet=args.quiet))
+                                    exec_cmd=exec_cmd, quiet=quiet, cfg=cfg))
 
     parser = _build_parser(mode="sub")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if args.command in ("list", "ls"):
         timers = _list_all_timers()
