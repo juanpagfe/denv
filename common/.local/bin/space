@@ -1,0 +1,537 @@
+#!/usr/bin/env python3
+"""space — Disk Usage Analyzer: analyze disk usage without depending on `du`.
+
+Reads filesystem stats via os.statvfs and walks directories via os.scandir.
+"""
+
+import argparse
+import json
+import os
+import signal
+import sys
+import time
+from pathlib import Path
+
+__version__ = "1.0.0"
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+_IS_TTY = sys.stdout.isatty() and os.environ.get("NO_COLOR") is None
+_INTERRUPTED = False
+
+def _sig_handler(sig, frame):
+    global _INTERRUPTED
+    _INTERRUPTED = True
+    _eprint("\nInterrupted — showing partial results.")
+
+signal.signal(signal.SIGINT, _sig_handler)
+
+def _color(text, code):
+    if _IS_TTY:
+        return f"\033[{code}m{text}\033[0m"
+    return str(text)
+
+def _bold(t):   return _color(t, "1")
+def _green(t):  return _color(t, "32")
+def _red(t):    return _color(t, "31")
+def _yellow(t): return _color(t, "33")
+def _cyan(t):   return _color(t, "36")
+def _dim(t):    return _color(t, "2")
+
+def _eprint(*a, **kw):
+    print(*a, file=sys.stderr, **kw)
+
+def _human_size(size):
+    for unit in ("B", "KB", "MB", "GB", "TB", "PB"):
+        if abs(size) < 1024.0:
+            return f"{size:.1f} {unit}"
+        size /= 1024.0
+    return f"{size:.1f} EB"
+
+def _bar(pct, width=20):
+    filled = int(width * pct / 100)
+    bar = "█" * filled + "░" * (width - filled)
+    if pct >= 90:
+        return _red(bar)
+    elif pct >= 70:
+        return _yellow(bar)
+    return _green(bar)
+
+# ---------------------------------------------------------------------------
+# Filesystem overview via statvfs
+# ---------------------------------------------------------------------------
+
+def _get_filesystems():
+    """Parse /proc/mounts and statvfs each real filesystem."""
+    filesystems = []
+    seen_devs = set()
+    try:
+        with open("/proc/mounts") as f:
+            mounts = f.readlines()
+    except FileNotFoundError:
+        return filesystems
+
+    for line in mounts:
+        parts = line.split()
+        if len(parts) < 3:
+            continue
+        dev, mount, fstype = parts[0], parts[1], parts[2]
+        # Skip virtual filesystems
+        if fstype in ("proc", "sysfs", "devtmpfs", "devpts", "tmpfs", "cgroup",
+                       "cgroup2", "pstore", "securityfs", "debugfs", "hugetlbfs",
+                       "mqueue", "fusectl", "configfs", "binfmt_misc", "autofs",
+                       "tracefs", "bpf", "nsfs", "efivarfs", "ramfs"):
+            continue
+        if dev in seen_devs:
+            continue
+        seen_devs.add(dev)
+        try:
+            st = os.statvfs(mount)
+        except (PermissionError, OSError):
+            continue
+        total = st.f_blocks * st.f_frsize
+        free = st.f_bfree * st.f_frsize
+        avail = st.f_bavail * st.f_frsize
+        used = total - free
+        pct = (used / total * 100) if total > 0 else 0
+        filesystems.append({
+            "device": dev,
+            "mount": mount,
+            "fstype": fstype,
+            "total": total,
+            "used": used,
+            "available": avail,
+            "percent": round(pct, 1),
+        })
+    return filesystems
+
+
+# ---------------------------------------------------------------------------
+# Directory scanning
+# ---------------------------------------------------------------------------
+
+KNOWN_CACHES = [
+    ("~/.cache", "User cache"),
+    ("~/.npm", "npm cache"),
+    ("~/.yarn/cache", "Yarn cache"),
+    ("~/.m2/repository", "Maven cache"),
+    ("~/.gradle/caches", "Gradle cache"),
+    ("~/.cargo/registry", "Cargo registry"),
+    ("~/.local/share/pip/cache", "pip cache"),
+    ("~/.local/share/pnpm/store", "pnpm store"),
+    ("~/.nuget/packages", "NuGet cache"),
+]
+
+BUILD_ARTIFACT_DIRS = {"node_modules", "target", "build", "dist", "__pycache__",
+                       ".next", ".nuxt", ".gradle", "out", "bin", "obj", ".tox"}
+
+LOG_PATTERNS = {"*.log", "*.log.*"}
+
+
+def _dir_size(path, max_depth=None, current_depth=0, exclude=None,
+              follow_symlinks=False, cross_fs=False, root_dev=None,
+              show_hidden=True):
+    """Recursively compute directory sizes. Returns (total, children_list)."""
+    global _INTERRUPTED
+    total = 0
+    children = []
+    exclude = exclude or set()
+
+    try:
+        entries = list(os.scandir(path))
+    except PermissionError:
+        _eprint(f"  Permission denied: {path}")
+        return 0, []
+    except FileNotFoundError:
+        return 0, []
+    except OSError as e:
+        _eprint(f"  Error scanning {path}: {e}")
+        return 0, []
+
+    for entry in entries:
+        if _INTERRUPTED:
+            break
+        name = entry.name
+        if not show_hidden and name.startswith("."):
+            continue
+        if name in exclude:
+            continue
+        full = entry.path
+
+        try:
+            is_link = entry.is_symlink()
+            if is_link and not follow_symlinks:
+                continue
+
+            if entry.is_dir(follow_symlinks=follow_symlinks):
+                # Cross-filesystem check
+                if not cross_fs and root_dev is not None:
+                    try:
+                        dev = os.stat(full).st_dev
+                        if dev != root_dev:
+                            continue
+                    except (OSError, FileNotFoundError):
+                        continue
+
+                if max_depth is not None and current_depth >= max_depth:
+                    # Still count size but don't recurse children list
+                    sz, _ = _dir_size(full, max_depth=None, current_depth=current_depth+1,
+                                       exclude=exclude, follow_symlinks=follow_symlinks,
+                                       cross_fs=cross_fs, root_dev=root_dev,
+                                       show_hidden=show_hidden)
+                    total += sz
+                    children.append({"path": full, "name": name, "size": sz, "type": "dir"})
+                else:
+                    sz, _ = _dir_size(full, max_depth=max_depth,
+                                       current_depth=current_depth+1,
+                                       exclude=exclude, follow_symlinks=follow_symlinks,
+                                       cross_fs=cross_fs, root_dev=root_dev,
+                                       show_hidden=show_hidden)
+                    total += sz
+                    children.append({"path": full, "name": name, "size": sz, "type": "dir"})
+            elif entry.is_file(follow_symlinks=follow_symlinks):
+                try:
+                    sz = entry.stat(follow_symlinks=follow_symlinks).st_size
+                except (OSError, FileNotFoundError):
+                    sz = 0
+                total += sz
+                children.append({"path": full, "name": name, "size": sz, "type": "file"})
+        except (OSError, FileNotFoundError):
+            continue
+
+    return total, children
+
+
+def _find_largest(path, count=10, files_only=False, dirs_only=False, **kw):
+    """Find the largest items under a path."""
+    _, children = _dir_size(path, max_depth=1, **kw)
+    if files_only:
+        children = [c for c in children if c["type"] == "file"]
+    if dirs_only:
+        children = [c for c in children if c["type"] == "dir"]
+    children.sort(key=lambda c: c["size"], reverse=True)
+    return children[:count]
+
+
+def _find_old_files(path, days=90, count=20):
+    """Find files not modified in the last N days."""
+    cutoff = time.time() - days * 86400
+    old = []
+    try:
+        for entry in os.scandir(path):
+            try:
+                if entry.is_file(follow_symlinks=False):
+                    st = entry.stat(follow_symlinks=False)
+                    if st.st_mtime < cutoff:
+                        old.append({"path": entry.path, "name": entry.name,
+                                    "size": st.st_size, "mtime": st.st_mtime})
+            except (OSError, FileNotFoundError):
+                continue
+    except (PermissionError, FileNotFoundError):
+        pass
+    old.sort(key=lambda x: x["size"], reverse=True)
+    return old[:count]
+
+
+# ---------------------------------------------------------------------------
+# Docker mode
+# ---------------------------------------------------------------------------
+
+def _docker_usage():
+    """Estimate Docker disk usage by reading /var/lib/docker."""
+    docker_root = "/var/lib/docker"
+    result = {"images": 0, "containers": 0, "volumes": 0, "build_cache": 0, "total": 0}
+    if not os.path.isdir(docker_root):
+        return None
+
+    dirs_map = {
+        "overlay2": "images",
+        "image": "images",
+        "containers": "containers",
+        "volumes": "volumes",
+        "buildkit": "build_cache",
+    }
+
+    for sub, key in dirs_map.items():
+        p = os.path.join(docker_root, sub)
+        if os.path.isdir(p):
+            sz, _ = _dir_size(p, max_depth=0)
+            result[key] += sz
+
+    result["total"] = sum(v for k, v in result.items() if k != "total")
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Cache mode
+# ---------------------------------------------------------------------------
+
+def _cache_usage():
+    """Detect known caches and their sizes."""
+    caches = []
+    home = Path.home()
+    for pattern, label in KNOWN_CACHES:
+        p = Path(os.path.expanduser(pattern))
+        if p.is_dir():
+            sz, _ = _dir_size(str(p), max_depth=0)
+            caches.append({"path": str(p), "label": label, "size": sz})
+    return caches
+
+
+# ---------------------------------------------------------------------------
+# Output
+# ---------------------------------------------------------------------------
+
+def _print_filesystems(filesystems):
+    print(_bold("Filesystem Usage:"))
+    print()
+    for fs in filesystems:
+        pct = fs["percent"]
+        print(f"  {_bold(fs['mount'])}  ({fs['device']}, {fs['fstype']})")
+        print(f"    {_bar(pct)} {pct}%  "
+              f"used {_human_size(fs['used'])} / {_human_size(fs['total'])}  "
+              f"avail {_green(_human_size(fs['available']))}")
+        print()
+
+
+def _print_dir_analysis(path, children, total):
+    print(_bold(f"Directory: {path}"))
+    print(f"  Total size: {_bold(_human_size(total))}")
+    print()
+    if not children:
+        print("  (empty or inaccessible)")
+        return
+    children.sort(key=lambda c: c["size"], reverse=True)
+    max_name = max(len(c["name"]) for c in children[:30])
+    for c in children[:30]:
+        icon = "📁" if c["type"] == "dir" else "📄"
+        pct = (c["size"] / total * 100) if total > 0 else 0
+        label = c["name"]
+        if c["name"] in BUILD_ARTIFACT_DIRS:
+            label = _yellow(c["name"]) + _dim(" [build artifact]")
+        print(f"  {icon} {label:<{max_name+20}}  {_human_size(c['size']):>12}  ({pct:.1f}%)")
+
+
+def _print_docker(docker):
+    if docker is None:
+        _eprint("Docker directory not found or not accessible.")
+        return
+    print(_bold("Docker Disk Usage:"))
+    print(f"  Images:      {_human_size(docker['images'])}")
+    print(f"  Containers:  {_human_size(docker['containers'])}")
+    print(f"  Volumes:     {_human_size(docker['volumes'])}")
+    print(f"  Build cache: {_human_size(docker['build_cache'])}")
+    print(f"  {_bold('Total:')}      {_bold(_human_size(docker['total']))}")
+
+
+def _print_caches(caches):
+    if not caches:
+        print(_dim("  No known caches found."))
+        return
+    print(_bold("Known Caches:"))
+    total = 0
+    for c in sorted(caches, key=lambda x: x["size"], reverse=True):
+        total += c["size"]
+        print(f"  {c['label']:<25}  {_human_size(c['size']):>12}  {_dim(c['path'])}")
+    print(f"\n  {_bold('Total cache:')} {_bold(_human_size(total))}")
+
+
+# ---------------------------------------------------------------------------
+# Clean mode
+# ---------------------------------------------------------------------------
+
+def _clean_interactive(path, dry_run=False):
+    """Interactive cleanup mode."""
+    print(_bold(f"Scanning {path} for cleanable items..."))
+    _, children = _dir_size(path, max_depth=1, current_depth=0,
+                            root_dev=os.stat(path).st_dev)
+    candidates = []
+    for c in children:
+        if c["type"] == "dir" and c["name"] in BUILD_ARTIFACT_DIRS:
+            c["reason"] = "build artifact"
+            candidates.append(c)
+    caches = _cache_usage()
+    for cache in caches:
+        if cache["path"].startswith(str(path)):
+            candidates.append({"path": cache["path"], "name": cache["label"],
+                               "size": cache["size"], "type": "cache",
+                               "reason": "cache"})
+
+    if not candidates:
+        print("  No obvious cleanable items found.")
+        return
+
+    print(f"\n  Found {len(candidates)} cleanable item(s):\n")
+    for i, c in enumerate(candidates, 1):
+        print(f"  [{i}] {c['name']:<30}  {_human_size(c['size']):>12}  ({c['reason']})")
+        print(f"       {_dim(c['path'])}")
+
+    total_recoverable = sum(c["size"] for c in candidates)
+    print(f"\n  {_bold('Recoverable space:')} {_bold(_human_size(total_recoverable))}")
+
+    if dry_run:
+        print(_dim("\n  (dry-run mode — nothing will be deleted)"))
+        return
+
+    print("\n  Enter numbers to delete (comma-separated), 'all', or 'q' to quit:")
+    try:
+        choice = input("  > ").strip()
+    except (EOFError, KeyboardInterrupt):
+        print("\n  Cancelled.")
+        return
+
+    if choice.lower() in ("q", "quit", ""):
+        print("  Cancelled.")
+        return
+
+    import shutil
+    if choice.lower() == "all":
+        indices = list(range(len(candidates)))
+    else:
+        try:
+            indices = [int(x.strip()) - 1 for x in choice.split(",")]
+        except ValueError:
+            _eprint("  Invalid selection.")
+            return
+
+    for idx in indices:
+        if 0 <= idx < len(candidates):
+            c = candidates[idx]
+            answer = input(f"  Delete {c['name']} ({_human_size(c['size'])})? [y/N] ").strip().lower()
+            if answer in ("y", "yes"):
+                try:
+                    if os.path.isdir(c["path"]):
+                        shutil.rmtree(c["path"])
+                    else:
+                        os.remove(c["path"])
+                    print(f"  ✓ Deleted {c['path']}")
+                except (PermissionError, OSError) as e:
+                    _eprint(f"  ✗ Failed: {e}")
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+SUBCOMMANDS = {"docker", "cache", "clean"}
+
+def _build_parser(has_subcommand):
+    p = argparse.ArgumentParser(prog="space",
+                                 description="Disk Usage Analyzer — analyze and clean disk usage.")
+    p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+    p.add_argument("--json", dest="json_output", action="store_true", help="JSON output.")
+    p.add_argument("--quiet", "-q", action="store_true", help="Suppress progress.")
+    p.add_argument("--verbose", "-v", action="store_true", help="Extra details.")
+    p.add_argument("--largest", type=int, default=10, help="Number of largest items to show (default: 10).")
+    p.add_argument("--depth", type=int, default=1, help="Recursion depth (default: 1).")
+    p.add_argument("--exclude", nargs="*", default=[], help="Directories to exclude.")
+    p.add_argument("--no-hidden", action="store_true", help="Exclude hidden files/dirs.")
+    p.add_argument("--exact", action="store_true", help="Show exact byte sizes.")
+    p.add_argument("--cross-fs", action="store_true", help="Cross filesystem boundaries.")
+    p.add_argument("--dry-run", action="store_true", help="Show what would be cleaned without doing it.")
+
+    if has_subcommand:
+        sub = p.add_subparsers(dest="command")
+        sub.add_parser("docker", help="Show Docker disk usage.")
+        sub.add_parser("cache", help="Show known cache usage.")
+        clean_p = sub.add_parser("clean", help="Interactive cleanup mode.")
+        clean_p.add_argument("clean_path", nargs="?", default=".", help="Path to clean.")
+        clean_p.add_argument("--dry-run", dest="clean_dry_run", action="store_true")
+    else:
+        p.add_argument("path", nargs="?", default=None, help="Directory to analyze.")
+
+    return p
+
+
+def main():
+    # Detect whether first non-flag arg is a subcommand or a path
+    positionals = [a for a in sys.argv[1:] if not a.startswith("-")]
+    first_pos = positionals[0] if positionals else None
+    has_subcommand = first_pos in SUBCOMMANDS
+
+    parser = _build_parser(has_subcommand)
+    args = parser.parse_args()
+    if not has_subcommand:
+        args.command = None
+
+    if args.command == "docker":
+        docker = _docker_usage()
+        if args.json_output:
+            print(json.dumps(docker, indent=2))
+        else:
+            _print_docker(docker)
+        sys.exit(0)
+
+    if args.command == "cache":
+        caches = _cache_usage()
+        if args.json_output:
+            print(json.dumps(caches, indent=2))
+        else:
+            _print_caches(caches)
+        sys.exit(0)
+
+    if args.command == "clean":
+        target = os.path.abspath(getattr(args, "clean_path", None) or ".")
+        dry_run = getattr(args, "clean_dry_run", False) or args.dry_run
+        _clean_interactive(target, dry_run=dry_run)
+        sys.exit(0)
+
+    # Default: filesystem overview or directory analysis
+    if args.path:
+        target = os.path.abspath(args.path)
+        if not os.path.isdir(target):
+            _eprint(f"Not a directory: {target}")
+            sys.exit(2)
+
+        try:
+            root_dev = os.stat(target).st_dev
+        except OSError as e:
+            _eprint(f"Cannot stat {target}: {e}")
+            sys.exit(2)
+
+        if not args.quiet:
+            _eprint(f"Scanning {target}...")
+
+        total, children = _dir_size(
+            target,
+            max_depth=args.depth,
+            exclude=set(args.exclude),
+            follow_symlinks=False,
+            cross_fs=args.cross_fs,
+            root_dev=root_dev,
+            show_hidden=not args.no_hidden,
+        )
+
+        if args.json_output:
+            result = {"path": target, "total": total, "children": sorted(children, key=lambda c: c["size"], reverse=True)[:args.largest]}
+            if args.exact:
+                print(json.dumps(result, indent=2))
+            else:
+                # Add human-readable sizes
+                result["total_human"] = _human_size(total)
+                for c in result["children"]:
+                    c["size_human"] = _human_size(c["size"])
+                print(json.dumps(result, indent=2))
+        else:
+            display = sorted(children, key=lambda c: c["size"], reverse=True)[:args.largest]
+            _print_dir_analysis(target, display, total)
+    else:
+        # Filesystem overview
+        filesystems = _get_filesystems()
+        if args.json_output:
+            for fs in filesystems:
+                if not args.exact:
+                    fs["total_human"] = _human_size(fs["total"])
+                    fs["used_human"] = _human_size(fs["used"])
+                    fs["available_human"] = _human_size(fs["available"])
+            print(json.dumps(filesystems, indent=2))
+        else:
+            _print_filesystems(filesystems)
+
+    sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()

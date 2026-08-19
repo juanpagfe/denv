@@ -1,0 +1,679 @@
+#!/usr/bin/env python3
+"""trash — Safe File Deletion: move files to trash following FreeDesktop Trash spec.
+
+Implements the FreeDesktop.org Trash Specification for safe file deletion,
+restore, search, and purge operations.
+"""
+
+import argparse
+import json
+import os
+import shutil
+import sys
+import time
+import urllib.parse
+from datetime import datetime, timezone
+from pathlib import Path
+
+__version__ = "1.0.0"
+
+_IS_TTY = sys.stdout.isatty() and os.environ.get("NO_COLOR") is None
+
+def _color(text, code):
+    if _IS_TTY:
+        return f"\033[{code}m{text}\033[0m"
+    return str(text)
+
+def _bold(t):   return _color(t, "1")
+def _green(t):  return _color(t, "32")
+def _red(t):    return _color(t, "31")
+def _yellow(t): return _color(t, "33")
+def _cyan(t):   return _color(t, "36")
+def _dim(t):    return _color(t, "2")
+
+def _eprint(*a, **kw):
+    print(*a, file=sys.stderr, **kw)
+
+def _human_size(size):
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if abs(size) < 1024.0:
+            return f"{size:.1f} {unit}"
+        size /= 1024.0
+    return f"{size:.1f} PB"
+
+
+# ---------------------------------------------------------------------------
+# Trash directory management (FreeDesktop Trash Specification)
+# ---------------------------------------------------------------------------
+
+def _get_home_trash():
+    """Get the home trash directory ($XDG_DATA_HOME/Trash or ~/.local/share/Trash)."""
+    xdg = os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share"))
+    return os.path.join(xdg, "Trash")
+
+
+def _get_trash_dir_for_path(filepath):
+    """Determine the correct trash directory for a file.
+
+    Per FreeDesktop spec:
+    - Files on the home partition use $HOME/.local/share/Trash
+    - Files on other partitions use $topdir/.Trash-$uid or $topdir/.Trash/$uid
+    """
+    home_trash = _get_home_trash()
+    try:
+        file_dev = os.stat(filepath).st_dev
+        home_dev = os.stat(os.path.expanduser("~")).st_dev
+    except OSError:
+        return home_trash
+
+    if file_dev == home_dev:
+        return home_trash
+
+    # Find the mount point for this device
+    mount_point = filepath
+    while mount_point != "/":
+        parent = os.path.dirname(mount_point)
+        try:
+            if os.stat(parent).st_dev != file_dev:
+                break
+        except OSError:
+            break
+        mount_point = parent
+
+    uid = os.getuid()
+    # Try $topdir/.Trash/$uid first (admin-created)
+    admin_trash = os.path.join(mount_point, ".Trash", str(uid))
+    if os.path.isdir(os.path.join(mount_point, ".Trash")):
+        # Check it's not a symlink and has sticky bit
+        top_trash = os.path.join(mount_point, ".Trash")
+        try:
+            st = os.lstat(top_trash)
+            if not os.path.islink(top_trash) and (st.st_mode & 0o1000):
+                return admin_trash
+        except OSError:
+            pass
+
+    # Fall back to $topdir/.Trash-$uid
+    return os.path.join(mount_point, f".Trash-{uid}")
+
+
+def _ensure_trash_dirs(trash_dir):
+    """Ensure the trash directory structure exists."""
+    files_dir = os.path.join(trash_dir, "files")
+    info_dir = os.path.join(trash_dir, "info")
+    os.makedirs(files_dir, mode=0o700, exist_ok=True)
+    os.makedirs(info_dir, mode=0o700, exist_ok=True)
+    return files_dir, info_dir
+
+
+def _unique_trash_name(files_dir, name):
+    """Generate a unique name in the trash files directory."""
+    candidate = name
+    counter = 1
+    while os.path.exists(os.path.join(files_dir, candidate)):
+        base, ext = os.path.splitext(name)
+        candidate = f"{base}.{counter}{ext}"
+        counter += 1
+    return candidate
+
+
+# ---------------------------------------------------------------------------
+# Trash info file (.trashinfo) — FreeDesktop format
+# ---------------------------------------------------------------------------
+
+def _write_trashinfo(info_dir, trash_name, original_path, deletion_date=None):
+    """Write a .trashinfo file per the FreeDesktop spec."""
+    if deletion_date is None:
+        deletion_date = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+    encoded_path = urllib.parse.quote(original_path, safe="/")
+    content = f"[Trash Info]\nPath={encoded_path}\nDeletionDate={deletion_date}\n"
+    info_path = os.path.join(info_dir, f"{trash_name}.trashinfo")
+    with open(info_path, "w") as f:
+        f.write(content)
+    return info_path
+
+
+def _read_trashinfo(info_path):
+    """Read a .trashinfo file."""
+    info = {"path": "", "deletion_date": "", "info_file": info_path}
+    try:
+        with open(info_path) as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("Path="):
+                    info["path"] = urllib.parse.unquote(line[5:])
+                elif line.startswith("DeletionDate="):
+                    info["deletion_date"] = line[13:]
+    except (FileNotFoundError, PermissionError):
+        pass
+    return info
+
+
+# ---------------------------------------------------------------------------
+# Core operations
+# ---------------------------------------------------------------------------
+
+def _trash_files(paths, verbose=False):
+    """Move files/directories to the trash."""
+    errors = 0
+    for filepath in paths:
+        filepath = os.path.abspath(filepath)
+        if not os.path.exists(filepath) and not os.path.islink(filepath):
+            _eprint(f"Not found: {filepath}")
+            errors += 1
+            continue
+
+        trash_dir = _get_trash_dir_for_path(filepath)
+        files_dir, info_dir = _ensure_trash_dirs(trash_dir)
+        name = os.path.basename(filepath)
+        trash_name = _unique_trash_name(files_dir, name)
+
+        try:
+            # Write trashinfo FIRST (atomic safety: if move fails, we clean up)
+            _write_trashinfo(info_dir, trash_name, filepath)
+            # Move the file
+            dest = os.path.join(files_dir, trash_name)
+            os.rename(filepath, dest)
+        except OSError as e:
+            # If rename fails (cross-device), try copy+delete
+            try:
+                dest = os.path.join(files_dir, trash_name)
+                if os.path.isdir(filepath):
+                    shutil.copytree(filepath, dest, symlinks=True)
+                else:
+                    shutil.copy2(filepath, dest)
+                if os.path.isdir(filepath):
+                    shutil.rmtree(filepath)
+                else:
+                    os.unlink(filepath)
+            except (OSError, shutil.Error) as e2:
+                _eprint(f"Failed to trash {filepath}: {e2}")
+                # Clean up trashinfo if move failed
+                info_file = os.path.join(info_dir, f"{trash_name}.trashinfo")
+                try:
+                    os.unlink(info_file)
+                except OSError:
+                    pass
+                errors += 1
+                continue
+
+        if verbose or _IS_TTY:
+            print(f"  🗑  {_dim(filepath)}")
+
+    return 1 if errors else 0
+
+
+def _list_trash(trash_dir=None, json_output=False):
+    """List items in the trash."""
+    if trash_dir is None:
+        trash_dir = _get_home_trash()
+
+    info_dir = os.path.join(trash_dir, "info")
+    files_dir = os.path.join(trash_dir, "files")
+    items = []
+
+    if not os.path.isdir(info_dir):
+        if json_output:
+            print(json.dumps([], indent=2))
+        else:
+            print("Trash is empty.")
+        return 0
+
+    for info_file in sorted(os.listdir(info_dir)):
+        if not info_file.endswith(".trashinfo"):
+            continue
+        trash_name = info_file[:-10]  # Remove .trashinfo
+        info = _read_trashinfo(os.path.join(info_dir, info_file))
+        trash_path = os.path.join(files_dir, trash_name)
+        size = 0
+        is_dir = False
+        try:
+            if os.path.isdir(trash_path):
+                is_dir = True
+                # Quick size estimate
+                for root, dirs, fls in os.walk(trash_path):
+                    for fl in fls:
+                        try:
+                            size += os.path.getsize(os.path.join(root, fl))
+                        except OSError:
+                            pass
+            else:
+                size = os.path.getsize(trash_path)
+        except OSError:
+            pass
+
+        items.append({
+            "id": trash_name,
+            "original_path": info["path"],
+            "deletion_date": info["deletion_date"],
+            "size": size,
+            "size_human": _human_size(size),
+            "is_dir": is_dir,
+        })
+
+    if json_output:
+        print(json.dumps(items, indent=2))
+        return 0
+
+    if not items:
+        print("Trash is empty.")
+        return 0
+
+    total_size = sum(i["size"] for i in items)
+    print(_bold(f"Trash: {len(items)} item(s), {_human_size(total_size)} total"))
+    print()
+    print(_bold(f"  {'ID':<30} {'ORIGINAL PATH':<40} {'SIZE':>10} {'DELETED':<20}"))
+    print("  " + "─" * 105)
+    for item in items:
+        icon = "📁" if item["is_dir"] else "📄"
+        print(f"  {icon} {item['id']:<28} {item['original_path']:<40} "
+              f"{item['size_human']:>10} {item['deletion_date']:<20}")
+
+    return 0
+
+
+def _restore_item(identifier, trash_dir=None):
+    """Restore an item from trash to its original location."""
+    if trash_dir is None:
+        trash_dir = _get_home_trash()
+
+    info_dir = os.path.join(trash_dir, "info")
+    files_dir = os.path.join(trash_dir, "files")
+
+    # Try exact match first, then search by name
+    matches = []
+    if os.path.isdir(info_dir):
+        for info_file in os.listdir(info_dir):
+            if not info_file.endswith(".trashinfo"):
+                continue
+            trash_name = info_file[:-10]
+            if trash_name == identifier:
+                matches = [(trash_name, info_file)]
+                break
+            info = _read_trashinfo(os.path.join(info_dir, info_file))
+            orig_name = os.path.basename(info["path"])
+            if orig_name == identifier or identifier in trash_name:
+                matches.append((trash_name, info_file))
+
+    if not matches:
+        _eprint(f"Not found in trash: {identifier}")
+        return 1
+
+    if len(matches) > 1:
+        print(f"Multiple matches for '{identifier}':")
+        for i, (name, _) in enumerate(matches, 1):
+            info = _read_trashinfo(os.path.join(info_dir, _))
+            print(f"  [{i}] {name}  (from {info['path']}, deleted {info['deletion_date']})")
+        try:
+            choice = int(input("Select number: ").strip()) - 1
+        except (ValueError, EOFError, KeyboardInterrupt):
+            print("Cancelled.")
+            return 1
+        if choice < 0 or choice >= len(matches):
+            _eprint("Invalid selection.")
+            return 1
+        matches = [matches[choice]]
+
+    trash_name, info_file = matches[0]
+    info = _read_trashinfo(os.path.join(info_dir, info_file))
+    original_path = info["path"]
+    trash_path = os.path.join(files_dir, trash_name)
+
+    if not os.path.exists(trash_path):
+        _eprint(f"Trash file missing: {trash_path}")
+        return 1
+
+    # Conflict detection
+    if os.path.exists(original_path):
+        print(f"Conflict: {original_path} already exists.")
+        print("  [o] Overwrite  [r] Rename  [c] Cancel")
+        try:
+            choice = input("  > ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            print("Cancelled.")
+            return 1
+        if choice == "c" or choice == "":
+            print("Cancelled.")
+            return 0
+        elif choice == "r":
+            base, ext = os.path.splitext(original_path)
+            counter = 1
+            while os.path.exists(f"{base}.restored-{counter}{ext}"):
+                counter += 1
+            original_path = f"{base}.restored-{counter}{ext}"
+            print(f"  Restoring as: {original_path}")
+        elif choice == "o":
+            pass
+        else:
+            _eprint("Invalid choice.")
+            return 1
+
+    # Ensure parent directory exists
+    parent = os.path.dirname(original_path)
+    os.makedirs(parent, exist_ok=True)
+
+    try:
+        os.rename(trash_path, original_path)
+    except OSError:
+        try:
+            if os.path.isdir(trash_path):
+                shutil.copytree(trash_path, original_path, symlinks=True)
+                shutil.rmtree(trash_path)
+            else:
+                shutil.copy2(trash_path, original_path)
+                os.unlink(trash_path)
+        except (OSError, shutil.Error) as e:
+            _eprint(f"Failed to restore: {e}")
+            return 1
+
+    # Remove trashinfo
+    try:
+        os.unlink(os.path.join(info_dir, info_file))
+    except OSError:
+        pass
+
+    print(f"  ✓ Restored to {_green(original_path)}")
+    return 0
+
+
+def _purge_item(identifier, trash_dir=None, force=False):
+    """Permanently delete an item from trash."""
+    if trash_dir is None:
+        trash_dir = _get_home_trash()
+
+    info_dir = os.path.join(trash_dir, "info")
+    files_dir = os.path.join(trash_dir, "files")
+
+    info_file = f"{identifier}.trashinfo"
+    info_path = os.path.join(info_dir, info_file)
+    trash_path = os.path.join(files_dir, identifier)
+
+    if not os.path.exists(info_path) and not os.path.exists(trash_path):
+        _eprint(f"Not found in trash: {identifier}")
+        return 1
+
+    if not force:
+        info = _read_trashinfo(info_path) if os.path.exists(info_path) else {}
+        answer = input(f"Permanently delete '{identifier}' (from {info.get('path', '?')})? [y/N] ").strip().lower()
+        if answer not in ("y", "yes"):
+            print("Cancelled.")
+            return 0
+
+    try:
+        if os.path.isdir(trash_path):
+            shutil.rmtree(trash_path)
+        elif os.path.exists(trash_path):
+            os.unlink(trash_path)
+    except OSError as e:
+        _eprint(f"Failed to delete: {e}")
+        return 1
+
+    try:
+        if os.path.exists(info_path):
+            os.unlink(info_path)
+    except OSError:
+        pass
+
+    print(f"  ✗ Permanently deleted: {identifier}")
+    return 0
+
+
+def _empty_trash(trash_dir=None, older_than_days=None, dry_run=False, force=False):
+    """Empty the trash, optionally only items older than N days."""
+    if trash_dir is None:
+        trash_dir = _get_home_trash()
+
+    info_dir = os.path.join(trash_dir, "info")
+    files_dir = os.path.join(trash_dir, "files")
+
+    if not os.path.isdir(info_dir):
+        print("Trash is already empty.")
+        return 0
+
+    items_to_delete = []
+    cutoff = None
+    if older_than_days is not None:
+        cutoff = datetime.now(timezone.utc).timestamp() - older_than_days * 86400
+
+    for info_file in os.listdir(info_dir):
+        if not info_file.endswith(".trashinfo"):
+            continue
+        trash_name = info_file[:-10]
+        info = _read_trashinfo(os.path.join(info_dir, info_file))
+
+        if cutoff is not None:
+            try:
+                del_date = datetime.fromisoformat(info["deletion_date"].replace("Z", "+00:00"))
+                if del_date.timestamp() > cutoff:
+                    continue
+            except (ValueError, AttributeError):
+                continue
+
+        items_to_delete.append((trash_name, info_file, info))
+
+    if not items_to_delete:
+        print("Nothing to delete.")
+        return 0
+
+    total_size = 0
+    for trash_name, _, _ in items_to_delete:
+        p = os.path.join(files_dir, trash_name)
+        try:
+            if os.path.isdir(p):
+                for root, dirs, fls in os.walk(p):
+                    for fl in fls:
+                        try:
+                            total_size += os.path.getsize(os.path.join(root, fl))
+                        except OSError:
+                            pass
+            else:
+                total_size += os.path.getsize(p)
+        except OSError:
+            pass
+
+    label = f"{len(items_to_delete)} item(s), {_human_size(total_size)}"
+    if older_than_days:
+        label += f" (older than {older_than_days} days)"
+
+    if dry_run:
+        print(f"Would delete: {label}")
+        for name, _, info in items_to_delete:
+            print(f"  {name}  ({info.get('path', '?')})")
+        return 0
+
+    if not force:
+        answer = input(f"Permanently delete {label}? [y/N] ").strip().lower()
+        if answer not in ("y", "yes"):
+            print("Cancelled.")
+            return 0
+
+    errors = 0
+    for trash_name, info_file, _ in items_to_delete:
+        trash_path = os.path.join(files_dir, trash_name)
+        try:
+            if os.path.isdir(trash_path):
+                shutil.rmtree(trash_path)
+            elif os.path.exists(trash_path):
+                os.unlink(trash_path)
+        except OSError as e:
+            _eprint(f"  Failed to delete {trash_name}: {e}")
+            errors += 1
+            continue
+        try:
+            os.unlink(os.path.join(info_dir, info_file))
+        except OSError:
+            pass
+
+    deleted = len(items_to_delete) - errors
+    print(f"  ✗ Deleted {deleted} item(s), freed {_human_size(total_size)}.")
+    return 1 if errors else 0
+
+
+def _search_trash(query, trash_dir=None, json_output=False):
+    """Search for items in the trash."""
+    if trash_dir is None:
+        trash_dir = _get_home_trash()
+
+    info_dir = os.path.join(trash_dir, "info")
+    results = []
+
+    if not os.path.isdir(info_dir):
+        if json_output:
+            print(json.dumps([], indent=2))
+        else:
+            print("Trash is empty.")
+        return 0
+
+    query_lower = query.lower()
+    for info_file in os.listdir(info_dir):
+        if not info_file.endswith(".trashinfo"):
+            continue
+        trash_name = info_file[:-10]
+        info = _read_trashinfo(os.path.join(info_dir, info_file))
+        if (query_lower in trash_name.lower() or
+            query_lower in info.get("path", "").lower()):
+            results.append({
+                "id": trash_name,
+                "original_path": info["path"],
+                "deletion_date": info["deletion_date"],
+            })
+
+    if json_output:
+        print(json.dumps(results, indent=2))
+    elif results:
+        print(_bold(f"Found {len(results)} match(es):"))
+        for r in results:
+            print(f"  {r['id']:<30} {r['original_path']:<50} {_dim(r['deletion_date'])}")
+    else:
+        print(f"No matches for '{query}'.")
+    return 0
+
+
+def _trash_size(trash_dir=None, json_output=False):
+    """Show trash size."""
+    if trash_dir is None:
+        trash_dir = _get_home_trash()
+    files_dir = os.path.join(trash_dir, "files")
+    total = 0
+    count = 0
+    if os.path.isdir(files_dir):
+        for item in os.listdir(files_dir):
+            count += 1
+            p = os.path.join(files_dir, item)
+            try:
+                if os.path.isdir(p):
+                    for root, dirs, fls in os.walk(p):
+                        for fl in fls:
+                            try:
+                                total += os.path.getsize(os.path.join(root, fl))
+                            except OSError:
+                                pass
+                else:
+                    total += os.path.getsize(p)
+            except OSError:
+                pass
+
+    if json_output:
+        print(json.dumps({"items": count, "size": total, "size_human": _human_size(total)}, indent=2))
+    else:
+        print(f"Trash: {count} item(s), {_bold(_human_size(total))}")
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+def _parse_older_than(value):
+    """Parse --older-than value like '30d', '2w', '6m'."""
+    m = __import__("re").match(r"^(\d+)([dwm])$", value)
+    if not m:
+        raise argparse.ArgumentTypeError(f"Invalid duration: {value} (use e.g. 30d, 2w, 6m)")
+    num = int(m.group(1))
+    unit = m.group(2)
+    if unit == "d":
+        return num
+    elif unit == "w":
+        return num * 7
+    elif unit == "m":
+        return num * 30
+    return num
+
+
+SUBCOMMANDS = {"list", "ls", "size", "restore", "purge", "empty", "search"}
+
+def _build_parser(mode="sub"):
+    """Build parser. mode='sub' for subcommand usage, mode='files' for trashing files."""
+    p = argparse.ArgumentParser(prog="trash",
+                                 description="Safe File Deletion — FreeDesktop Trash compatible.")
+    p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+    p.add_argument("--json", dest="json_output", action="store_true", help="JSON output.")
+    p.add_argument("--quiet", "-q", action="store_true")
+    p.add_argument("--verbose", "-v", action="store_true")
+
+    if mode == "files":
+        p.add_argument("files", nargs="+", help="Files/directories to trash.")
+    else:
+        sub = p.add_subparsers(dest="command")
+        sub.add_parser("list", aliases=["ls"], help="List items in trash.")
+        sub.add_parser("size", help="Show trash size.")
+
+        restore_p = sub.add_parser("restore", help="Restore item from trash.")
+        restore_p.add_argument("identifier", help="Trash ID or original filename.")
+
+        purge_p = sub.add_parser("purge", help="Permanently delete item from trash.")
+        purge_p.add_argument("identifier", help="Trash ID.")
+        purge_p.add_argument("--force", "-f", action="store_true")
+
+        empty_p = sub.add_parser("empty", help="Empty the trash.")
+        empty_p.add_argument("--older-than", type=_parse_older_than, default=None,
+                              help="Only delete items older than N (e.g. 30d, 2w).")
+        empty_p.add_argument("--dry-run", action="store_true")
+        empty_p.add_argument("--force", "-f", action="store_true")
+
+        search_p = sub.add_parser("search", help="Search trash.")
+        search_p.add_argument("query", help="Search term.")
+
+    return p
+
+
+def main():
+    # Detect whether first positional arg is a subcommand or files to trash
+    positionals = [a for a in sys.argv[1:] if not a.startswith("-")]
+    first_pos = positionals[0] if positionals else None
+    is_files = first_pos is not None and first_pos not in SUBCOMMANDS
+
+    if is_files:
+        parser = _build_parser(mode="files")
+        args = parser.parse_args()
+        sys.exit(_trash_files(args.files, verbose=args.verbose))
+
+    parser = _build_parser(mode="sub")
+    args = parser.parse_args()
+
+    if args.command in ("list", "ls"):
+        sys.exit(_list_trash(json_output=args.json_output))
+
+    if args.command == "size":
+        sys.exit(_trash_size(json_output=args.json_output))
+
+    if args.command == "restore":
+        sys.exit(_restore_item(args.identifier))
+
+    if args.command == "purge":
+        sys.exit(_purge_item(args.identifier, force=args.force))
+
+    if args.command == "empty":
+        sys.exit(_empty_trash(older_than_days=args.older_than,
+                               dry_run=args.dry_run, force=args.force))
+
+    if args.command == "search":
+        sys.exit(_search_trash(args.query, json_output=args.json_output))
+
+    # No command, no files
+    parser.print_help()
+    sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()

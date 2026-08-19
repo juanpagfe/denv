@@ -1,0 +1,493 @@
+#!/usr/bin/env python3
+"""timer — Terminal Timer: countdown timers with notifications and daemon support.
+
+Uses monotonic clocks for precision. No dependency on `sleep` for core timing logic.
+Handles system suspend/resume via CLOCK_REALTIME comparison.
+"""
+
+import argparse
+import json
+import os
+import re
+import select
+import signal
+import subprocess
+import sys
+import tempfile
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+
+__version__ = "1.0.0"
+
+_IS_TTY = sys.stdout.isatty() and os.environ.get("NO_COLOR") is None
+
+def _color(text, code):
+    if _IS_TTY:
+        return f"\033[{code}m{text}\033[0m"
+    return str(text)
+
+def _bold(t):   return _color(t, "1")
+def _green(t):  return _color(t, "32")
+def _red(t):    return _color(t, "31")
+def _yellow(t): return _color(t, "33")
+def _cyan(t):   return _color(t, "36")
+def _dim(t):    return _color(t, "2")
+
+def _eprint(*a, **kw):
+    print(*a, file=sys.stderr, **kw)
+
+# ---------------------------------------------------------------------------
+# Duration parsing
+# ---------------------------------------------------------------------------
+
+def _parse_duration(text):
+    """Parse duration strings like '10m', '1h30m', '2m30s', '90'."""
+    text = text.strip()
+
+    # Pure number → seconds
+    try:
+        return float(text)
+    except ValueError:
+        pass
+
+    total = 0
+    pattern = re.findall(r"(\d+(?:\.\d+)?)\s*([hHmMsS]?)", text)
+    if not pattern:
+        raise ValueError(f"Cannot parse duration: {text}")
+
+    for value_str, unit in pattern:
+        value = float(value_str)
+        unit = unit.lower()
+        if unit == "h":
+            total += value * 3600
+        elif unit == "m":
+            total += value * 60
+        elif unit == "s" or unit == "":
+            total += value
+
+    if total <= 0:
+        raise ValueError(f"Duration must be positive: {text}")
+    return total
+
+
+def _format_duration(seconds):
+    """Format seconds into human-readable duration."""
+    if seconds < 0:
+        return "0s"
+    h = int(seconds // 3600)
+    m = int((seconds % 3600) // 60)
+    s = int(seconds % 60)
+    parts = []
+    if h > 0:
+        parts.append(f"{h}h")
+    if m > 0:
+        parts.append(f"{m}m")
+    if s > 0 or not parts:
+        parts.append(f"{s}s")
+    return "".join(parts)
+
+
+# ---------------------------------------------------------------------------
+# Timer state persistence
+# ---------------------------------------------------------------------------
+
+def _state_dir():
+    """Get the timer state directory."""
+    xdg = os.environ.get("XDG_RUNTIME_DIR", tempfile.gettempdir())
+    d = os.path.join(xdg, "terminal-timer")
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+def _save_timer(timer_id, data):
+    """Save timer state to disk."""
+    path = os.path.join(_state_dir(), f"{timer_id}.json")
+    with open(path, "w") as f:
+        json.dump(data, f)
+
+
+def _load_timer(timer_id):
+    """Load timer state from disk."""
+    path = os.path.join(_state_dir(), f"{timer_id}.json")
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
+
+
+def _delete_timer_file(timer_id):
+    """Delete timer state file."""
+    path = os.path.join(_state_dir(), f"{timer_id}.json")
+    try:
+        os.unlink(path)
+    except FileNotFoundError:
+        pass
+
+
+def _list_all_timers():
+    """List all saved timers."""
+    d = _state_dir()
+    timers = []
+    for f in sorted(os.listdir(d)):
+        if f.endswith(".json"):
+            tid = f[:-5]
+            data = _load_timer(tid)
+            if data:
+                data["id"] = tid
+                timers.append(data)
+    return timers
+
+
+def _next_timer_id():
+    """Generate the next timer ID."""
+    existing = _list_all_timers()
+    if not existing:
+        return "1"
+    max_id = 0
+    for t in existing:
+        try:
+            n = int(t["id"])
+            if n > max_id:
+                max_id = n
+        except (ValueError, KeyError):
+            pass
+    return str(max_id + 1)
+
+
+# ---------------------------------------------------------------------------
+# Notifications
+# ---------------------------------------------------------------------------
+
+def _notify(label, bell=True, desktop=True):
+    """Send notification when timer finishes."""
+    msg = f"Timer finished: {label}" if label else "Timer finished!"
+
+    # Terminal bell
+    if bell:
+        sys.stdout.write("\a")
+        sys.stdout.flush()
+
+    # Desktop notification (best-effort)
+    if desktop:
+        try:
+            subprocess.run(["notify-send", "Timer", msg],
+                          capture_output=True, timeout=5)
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+
+
+def _exec_command(cmd):
+    """Execute a command when timer finishes."""
+    try:
+        result = subprocess.run(cmd, shell=True)
+        return result.returncode
+    except Exception as e:
+        _eprint(f"Command failed: {e}")
+        return 1
+
+
+# ---------------------------------------------------------------------------
+# Countdown display
+# ---------------------------------------------------------------------------
+
+def _run_countdown(duration, label="", bell=True, desktop=True,
+                   exec_cmd=None, timer_id=None, quiet=False):
+    """Run a countdown timer with display."""
+    start_real = time.time()
+    start_mono = time.monotonic()
+    end_real = start_real + duration
+
+    # Save state for cross-terminal visibility
+    if timer_id is None:
+        timer_id = _next_timer_id()
+
+    state = {
+        "id": timer_id,
+        "label": label,
+        "duration": duration,
+        "duration_human": _format_duration(duration),
+        "start_time": start_real,
+        "end_time": end_real,
+        "status": "running",
+        "pid": os.getpid(),
+    }
+    _save_timer(timer_id, state)
+
+    cancelled = False
+
+    def _handle_signal(sig, frame):
+        nonlocal cancelled
+        cancelled = True
+
+    old_int = signal.signal(signal.SIGINT, _handle_signal)
+    old_term = signal.signal(signal.SIGTERM, _handle_signal)
+
+    try:
+        while not cancelled:
+            now_mono = time.monotonic()
+            elapsed = now_mono - start_mono
+
+            # Also check real time to handle suspend/resume
+            now_real = time.time()
+            remaining_real = end_real - now_real
+            remaining_mono = duration - elapsed
+            # Use the smaller of the two to handle suspend correctly
+            remaining = min(remaining_real, remaining_mono)
+
+            if remaining <= 0:
+                break
+
+            if not quiet and _IS_TTY:
+                fmt = _format_duration(remaining)
+                label_part = f"  {_cyan(label)}" if label else ""
+                sys.stdout.write(f"\r  ⏱  {_bold(fmt)} remaining{label_part}   ")
+                sys.stdout.flush()
+
+            # Use select for precise sub-second timing without busy-wait
+            try:
+                select.select([], [], [], min(0.25, remaining))
+            except (select.error, OSError):
+                time.sleep(min(0.25, remaining))
+
+    finally:
+        signal.signal(signal.SIGINT, old_int)
+        signal.signal(signal.SIGTERM, old_term)
+
+    if cancelled:
+        if not quiet:
+            print(f"\r  ⏱  {_yellow('Cancelled')}{' — ' + label if label else ''}          ")
+        state["status"] = "cancelled"
+        _save_timer(timer_id, state)
+        _delete_timer_file(timer_id)
+        return 1
+
+    # Timer finished
+    if not quiet:
+        print(f"\r  ⏱  {_green('Done!')} {_format_duration(duration)}{' — ' + label if label else ''}          ")
+
+    _notify(label, bell=bell, desktop=desktop)
+
+    if exec_cmd:
+        if not quiet:
+            print(f"  Executing: {exec_cmd}")
+        rc = _exec_command(exec_cmd)
+        state["exec_exit_code"] = rc
+
+    state["status"] = "finished"
+    state["finished_at"] = time.time()
+    _save_timer(timer_id, state)
+    # Clean up after a short delay
+    _delete_timer_file(timer_id)
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# Daemon mode
+# ---------------------------------------------------------------------------
+
+def _run_daemon(duration, label="", bell=True, desktop=True, exec_cmd=None):
+    """Run timer in background (daemon mode)."""
+    timer_id = _next_timer_id()
+
+    pid = os.fork()
+    if pid > 0:
+        # Parent
+        print(f"  Timer {timer_id} started in background (PID {pid}): {_format_duration(duration)}"
+              + (f" — {label}" if label else ""))
+        return 0
+
+    # Child — detach from terminal
+    os.setsid()
+    # Close std file descriptors
+    devnull = os.open(os.devnull, os.O_RDWR)
+    os.dup2(devnull, 0)
+    os.dup2(devnull, 1)
+    os.dup2(devnull, 2)
+    os.close(devnull)
+
+    _run_countdown(duration, label=label, bell=bell, desktop=desktop,
+                   exec_cmd=exec_cmd, timer_id=timer_id, quiet=True)
+    os._exit(0)
+
+
+# ---------------------------------------------------------------------------
+# List / cancel / show
+# ---------------------------------------------------------------------------
+
+def _print_timer_list(timers, json_output=False):
+    """Display active timers."""
+    # Filter to running timers and update remaining time
+    active = []
+    for t in timers:
+        if t.get("status") != "running":
+            continue
+        remaining = t.get("end_time", 0) - time.time()
+        if remaining <= 0:
+            continue
+        t["remaining"] = remaining
+        t["remaining_human"] = _format_duration(remaining)
+        # Check if PID is still alive
+        pid = t.get("pid")
+        if pid:
+            try:
+                os.kill(pid, 0)
+                t["alive"] = True
+            except (ProcessLookupError, PermissionError):
+                t["alive"] = False
+        active.append(t)
+
+    if json_output:
+        print(json.dumps(active, indent=2))
+        return
+
+    if not active:
+        print("No active timers.")
+        return
+
+    print(_bold(f"Active timers: {len(active)}"))
+    print()
+    print(_bold(f"  {'ID':<5} {'REMAINING':>12} {'DURATION':>12} {'LABEL':<30} {'PID':>8} {'STATUS':<10}"))
+    print("  " + "─" * 80)
+    for t in active:
+        alive_str = _green("running") if t.get("alive") else _red("orphaned")
+        print(f"  {t['id']:<5} {_bold(t['remaining_human']):>12} {t.get('duration_human', ''):>12} "
+              f"{t.get('label', ''):<30} {t.get('pid', ''):>8} {alive_str}")
+
+
+def _cancel_timer(timer_id):
+    """Cancel a running timer."""
+    data = _load_timer(timer_id)
+    if not data:
+        _eprint(f"Timer {timer_id} not found.")
+        return 1
+
+    pid = data.get("pid")
+    if pid:
+        try:
+            os.kill(pid, signal.SIGTERM)
+            print(f"  Cancelled timer {timer_id} (sent SIGTERM to PID {pid}).")
+        except ProcessLookupError:
+            print(f"  Timer {timer_id} process already gone.")
+        except PermissionError:
+            _eprint(f"  Permission denied to kill PID {pid}.")
+            return 1
+
+    _delete_timer_file(timer_id)
+    return 0
+
+
+def _show_timer(timer_id, json_output=False):
+    """Show details of a specific timer."""
+    data = _load_timer(timer_id)
+    if not data:
+        _eprint(f"Timer {timer_id} not found.")
+        return 1
+
+    remaining = data.get("end_time", 0) - time.time()
+    data["remaining"] = max(0, remaining)
+    data["remaining_human"] = _format_duration(max(0, remaining))
+
+    if json_output:
+        print(json.dumps(data, indent=2))
+    else:
+        print(_bold(f"Timer {timer_id}:"))
+        print(f"  Label:     {data.get('label', '-')}")
+        print(f"  Duration:  {data.get('duration_human', '-')}")
+        print(f"  Remaining: {data['remaining_human']}")
+        print(f"  Status:    {data.get('status', '-')}")
+        print(f"  PID:       {data.get('pid', '-')}")
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+SUBCOMMANDS = {"list", "ls", "cancel", "show"}
+
+def _build_parser(mode="sub"):
+    """Build parser. mode='sub' for subcommand, mode='timer' for creating a timer."""
+    p = argparse.ArgumentParser(
+        prog="timer",
+        description="Terminal Timer — countdown timers with notifications.",
+    )
+    p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+    p.add_argument("--json", dest="json_output", action="store_true", help="JSON output.")
+    p.add_argument("--quiet", "-q", action="store_true")
+    p.add_argument("--verbose", "-v", action="store_true")
+    p.add_argument("--no-bell", action="store_true", help="Disable terminal bell.")
+    p.add_argument("--no-desktop", action="store_true", help="Disable desktop notification.")
+    p.add_argument("--exec", dest="exec_cmd", default=None,
+                   help="Command to run when timer finishes.")
+    p.add_argument("--daemon", "-d", action="store_true",
+                   help="Run timer in background (daemon mode).")
+
+    if mode == "timer":
+        p.add_argument("duration", help="Timer duration (e.g. 10m, 1h30m, 2m30s).")
+        p.add_argument("label", nargs="?", default="",
+                       help="Optional timer description.")
+    else:
+        sub = p.add_subparsers(dest="command")
+        sub.add_parser("list", aliases=["ls"], help="List active timers.")
+
+        cancel_p = sub.add_parser("cancel", help="Cancel a timer.")
+        cancel_p.add_argument("timer_id", help="Timer ID to cancel.")
+
+        show_p = sub.add_parser("show", help="Show timer details.")
+        show_p.add_argument("timer_id", help="Timer ID.")
+
+    return p
+
+
+def main():
+    # Detect whether first positional arg is a subcommand or a duration
+    positionals = [a for a in sys.argv[1:] if not a.startswith("-")]
+    first_pos = positionals[0] if positionals else None
+    is_timer = first_pos is not None and first_pos not in SUBCOMMANDS
+
+    if is_timer:
+        parser = _build_parser(mode="timer")
+        args = parser.parse_args()
+        try:
+            duration = _parse_duration(args.duration)
+        except ValueError as e:
+            _eprint(str(e))
+            sys.exit(2)
+
+        label = args.label or ""
+        bell = not args.no_bell
+        desktop = not args.no_desktop
+
+        if args.daemon:
+            sys.exit(_run_daemon(duration, label=label, bell=bell, desktop=desktop,
+                                 exec_cmd=args.exec_cmd))
+        else:
+            if not args.quiet:
+                print(f"  ⏱  Timer: {_bold(_format_duration(duration))}"
+                      + (f" — {_cyan(label)}" if label else ""))
+            sys.exit(_run_countdown(duration, label=label, bell=bell, desktop=desktop,
+                                    exec_cmd=args.exec_cmd, quiet=args.quiet))
+
+    parser = _build_parser(mode="sub")
+    args = parser.parse_args()
+
+    if args.command in ("list", "ls"):
+        timers = _list_all_timers()
+        _print_timer_list(timers, json_output=args.json_output)
+        sys.exit(0)
+
+    if args.command == "cancel":
+        sys.exit(_cancel_timer(args.timer_id))
+
+    if args.command == "show":
+        sys.exit(_show_timer(args.timer_id, json_output=args.json_output))
+
+    # No command
+    parser.print_help()
+    sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,742 @@
+#!/usr/bin/env python3
+"""proc — Process Inspector: inspect processes using /proc directly.
+
+No dependency on ps, top, lsof, or any external command.
+"""
+
+import argparse
+import json
+import os
+import pwd
+import re
+import signal
+import socket
+import struct
+import sys
+import time
+from pathlib import Path
+
+__version__ = "1.0.0"
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+_IS_TTY = sys.stdout.isatty() and os.environ.get("NO_COLOR") is None
+_CLK_TCK = os.sysconf("SC_CLK_TCK")
+_PAGE_SIZE = os.sysconf("SC_PAGE_SIZE")
+
+def _color(text, code):
+    if _IS_TTY:
+        return f"\033[{code}m{text}\033[0m"
+    return str(text)
+
+def _bold(t):   return _color(t, "1")
+def _green(t):  return _color(t, "32")
+def _red(t):    return _color(t, "31")
+def _yellow(t): return _color(t, "33")
+def _cyan(t):   return _color(t, "36")
+def _dim(t):    return _color(t, "2")
+
+def _eprint(*a, **kw):
+    print(*a, file=sys.stderr, **kw)
+
+def _human_size(kb):
+    size = kb * 1024
+    for unit in ("B", "KB", "MB", "GB"):
+        if abs(size) < 1024.0:
+            return f"{size:.1f} {unit}"
+        size /= 1024.0
+    return f"{size:.1f} TB"
+
+def _uptime_str(seconds):
+    if seconds < 60:
+        return f"{seconds:.0f}s"
+    elif seconds < 3600:
+        return f"{seconds/60:.0f}m {seconds%60:.0f}s"
+    elif seconds < 86400:
+        h = int(seconds // 3600)
+        m = int((seconds % 3600) // 60)
+        return f"{h}h {m}m"
+    else:
+        d = int(seconds // 86400)
+        h = int((seconds % 86400) // 3600)
+        return f"{d}d {h}h"
+
+
+def _system_uptime():
+    with open("/proc/uptime") as f:
+        return float(f.read().split()[0])
+
+
+def _boot_time():
+    return time.time() - _system_uptime()
+
+
+# ---------------------------------------------------------------------------
+# Process info from /proc
+# ---------------------------------------------------------------------------
+
+PROC_STATES = {
+    "R": "Running", "S": "Sleeping", "D": "Disk Sleep",
+    "Z": "Zombie", "T": "Stopped", "t": "Tracing Stop",
+    "X": "Dead", "I": "Idle",
+}
+
+
+def _read_proc_stat(pid):
+    """Read /proc/<pid>/stat."""
+    try:
+        with open(f"/proc/{pid}/stat") as f:
+            data = f.read()
+    except (FileNotFoundError, PermissionError):
+        return None
+
+    # The comm field is in parens and may contain spaces
+    m = re.match(r"(\d+)\s+\((.+)\)\s+(.*)", data, re.DOTALL)
+    if not m:
+        return None
+    fields = m.group(3).split()
+    return {
+        "pid": int(m.group(1)),
+        "comm": m.group(2),
+        "state": fields[0],
+        "ppid": int(fields[1]),
+        "pgrp": int(fields[2]),
+        "session": int(fields[3]),
+        "utime": int(fields[11]),
+        "stime": int(fields[12]),
+        "num_threads": int(fields[17]),
+        "starttime": int(fields[19]),
+        "vsize": int(fields[20]),
+        "rss": int(fields[21]),
+    }
+
+
+def _read_proc_status(pid):
+    """Read /proc/<pid>/status for extra fields."""
+    info = {}
+    try:
+        with open(f"/proc/{pid}/status") as f:
+            for line in f:
+                parts = line.split(":", 1)
+                if len(parts) == 2:
+                    info[parts[0].strip()] = parts[1].strip()
+    except (FileNotFoundError, PermissionError):
+        pass
+    return info
+
+
+def _get_process_info(pid, include_env=False, include_open_files=False,
+                      include_sockets=False, include_ports=False):
+    """Full process info from /proc/<pid>."""
+    stat = _read_proc_stat(pid)
+    if stat is None:
+        return None
+
+    status = _read_proc_status(pid)
+    sys_uptime = _system_uptime()
+    start_sec = stat["starttime"] / _CLK_TCK
+    proc_uptime = sys_uptime - start_sec
+
+    # CPU time
+    total_cpu_ticks = stat["utime"] + stat["stime"]
+    cpu_seconds = total_cpu_ticks / _CLK_TCK
+    cpu_pct = (cpu_seconds / proc_uptime * 100) if proc_uptime > 0 else 0
+
+    # Memory
+    rss_kb = stat["rss"] * _PAGE_SIZE // 1024
+    vsize_kb = stat["vsize"] // 1024
+
+    # UID -> user
+    uid_line = status.get("Uid", "")
+    uid = int(uid_line.split()[0]) if uid_line else -1
+    try:
+        user = pwd.getpwuid(uid).pw_name
+    except (KeyError, ValueError):
+        user = str(uid)
+
+    info = {
+        "pid": pid,
+        "ppid": stat["ppid"],
+        "name": stat["comm"],
+        "state": PROC_STATES.get(stat["state"], stat["state"]),
+        "state_code": stat["state"],
+        "user": user,
+        "uid": uid,
+        "uptime": round(proc_uptime, 1),
+        "uptime_human": _uptime_str(proc_uptime),
+        "cpu_percent": round(cpu_pct, 1),
+        "cpu_time": round(cpu_seconds, 2),
+        "memory_rss_kb": rss_kb,
+        "memory_vsize_kb": vsize_kb,
+        "memory_rss_human": _human_size(rss_kb),
+        "memory_vsize_human": _human_size(vsize_kb),
+        "threads": stat["num_threads"],
+    }
+
+    # Shared memory
+    vm_shared = status.get("RssAnon")
+    vm_rss_shared = status.get("RssShmem")
+    if vm_rss_shared:
+        try:
+            info["memory_shared_kb"] = int(vm_rss_shared.split()[0])
+        except (ValueError, IndexError):
+            pass
+
+    # exe
+    try:
+        info["exe"] = os.readlink(f"/proc/{pid}/exe")
+    except (PermissionError, FileNotFoundError, OSError):
+        info["exe"] = ""
+
+    # cmdline
+    try:
+        with open(f"/proc/{pid}/cmdline") as f:
+            info["cmdline"] = f.read().replace("\0", " ").strip()
+    except (PermissionError, FileNotFoundError):
+        info["cmdline"] = ""
+
+    # cwd
+    try:
+        info["cwd"] = os.readlink(f"/proc/{pid}/cwd")
+    except (PermissionError, FileNotFoundError, OSError):
+        info["cwd"] = ""
+
+    # cgroup
+    try:
+        with open(f"/proc/{pid}/cgroup") as f:
+            info["cgroup"] = f.read().strip()
+    except (PermissionError, FileNotFoundError):
+        info["cgroup"] = ""
+
+    # namespace info
+    ns_info = {}
+    ns_dir = f"/proc/{pid}/ns"
+    try:
+        for ns in os.listdir(ns_dir):
+            try:
+                target = os.readlink(f"{ns_dir}/{ns}")
+                ns_info[ns] = target
+            except (OSError, PermissionError):
+                pass
+    except (FileNotFoundError, PermissionError):
+        pass
+    info["namespaces"] = ns_info
+
+    # Docker detection
+    docker_container = None
+    cgroup_text = info.get("cgroup", "")
+    if "docker" in cgroup_text or "containerd" in cgroup_text:
+        for part in cgroup_text.split("/"):
+            if len(part) >= 12 and all(c in "0123456789abcdef" for c in part[:12]):
+                docker_container = part[:12]
+                break
+        if not docker_container:
+            docker_container = "container"
+    info["docker_container"] = docker_container
+
+    # Environment variables (optional, security-sensitive)
+    if include_env:
+        try:
+            with open(f"/proc/{pid}/environ") as f:
+                env_raw = f.read()
+            env_pairs = {}
+            for item in env_raw.split("\0"):
+                if "=" in item:
+                    k, v = item.split("=", 1)
+                    env_pairs[k] = v
+            info["environ"] = env_pairs
+        except (PermissionError, FileNotFoundError):
+            info["environ"] = {}
+
+    # Open files
+    if include_open_files:
+        fds = []
+        fd_dir = f"/proc/{pid}/fd"
+        try:
+            for fd in os.listdir(fd_dir):
+                try:
+                    target = os.readlink(f"{fd_dir}/{fd}")
+                    fds.append({"fd": int(fd), "target": target})
+                except (OSError, PermissionError, ValueError):
+                    pass
+        except (PermissionError, FileNotFoundError):
+            pass
+        info["open_files"] = fds
+
+    # Sockets / Ports
+    if include_sockets or include_ports:
+        socket_inodes = set()
+        fd_dir = f"/proc/{pid}/fd"
+        try:
+            for fd in os.listdir(fd_dir):
+                try:
+                    target = os.readlink(f"{fd_dir}/{fd}")
+                    m = re.match(r"socket:\[(\d+)\]", target)
+                    if m:
+                        socket_inodes.add(int(m.group(1)))
+                except (OSError, PermissionError):
+                    pass
+        except (PermissionError, FileNotFoundError):
+            pass
+
+        if socket_inodes:
+            socks = _resolve_socket_inodes(socket_inodes)
+            if include_sockets:
+                info["sockets"] = socks
+            if include_ports:
+                info["ports"] = list({s["local_port"] for s in socks if s.get("local_port")})
+
+    # Thread list
+    task_dir = f"/proc/{pid}/task"
+    thread_list = []
+    try:
+        for tid in os.listdir(task_dir):
+            if tid.isdigit():
+                thread_list.append(int(tid))
+    except (PermissionError, FileNotFoundError):
+        pass
+    info["thread_ids"] = thread_list
+
+    return info
+
+
+def _resolve_socket_inodes(inodes):
+    """Resolve socket inodes to network info from /proc/net/*."""
+    results = []
+    for proto in ("tcp", "udp"):
+        for suffix, family in (("", 4), ("6", 6)):
+            path = f"/proc/net/{proto}{suffix}"
+            try:
+                with open(path) as f:
+                    for line in f.readlines()[1:]:
+                        parts = line.split()
+                        if len(parts) < 10:
+                            continue
+                        inode = int(parts[9])
+                        if inode in inodes:
+                            local_hex, local_port_hex = parts[1].split(":")
+                            local_port = int(local_port_hex, 16)
+                            results.append({
+                                "protocol": proto.upper(),
+                                "family": f"IPv{family}",
+                                "local_port": local_port,
+                                "inode": inode,
+                            })
+            except FileNotFoundError:
+                continue
+    return results
+
+
+# ---------------------------------------------------------------------------
+# List all processes
+# ---------------------------------------------------------------------------
+
+def _list_all_processes():
+    """List all PIDs from /proc."""
+    pids = []
+    for entry in os.listdir("/proc"):
+        if entry.isdigit():
+            pids.append(int(entry))
+    return sorted(pids)
+
+
+def _get_process_summary(pid):
+    """Light-weight summary for listing."""
+    stat = _read_proc_stat(pid)
+    if stat is None:
+        return None
+    status = _read_proc_status(pid)
+    sys_uptime = _system_uptime()
+    start_sec = stat["starttime"] / _CLK_TCK
+    proc_uptime = sys_uptime - start_sec
+    total_cpu_ticks = stat["utime"] + stat["stime"]
+    cpu_seconds = total_cpu_ticks / _CLK_TCK
+    cpu_pct = (cpu_seconds / proc_uptime * 100) if proc_uptime > 0 else 0
+    rss_kb = stat["rss"] * _PAGE_SIZE // 1024
+
+    uid_line = status.get("Uid", "")
+    uid = int(uid_line.split()[0]) if uid_line else -1
+    try:
+        user = pwd.getpwuid(uid).pw_name
+    except (KeyError, ValueError):
+        user = str(uid)
+
+    return {
+        "pid": pid,
+        "ppid": stat["ppid"],
+        "name": stat["comm"],
+        "state": PROC_STATES.get(stat["state"], stat["state"]),
+        "user": user,
+        "cpu_percent": round(cpu_pct, 1),
+        "memory_rss_kb": rss_kb,
+        "threads": stat["num_threads"],
+        "uptime_human": _uptime_str(proc_uptime),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Process tree
+# ---------------------------------------------------------------------------
+
+def _build_process_tree():
+    """Build a tree of all processes."""
+    procs = {}
+    children_map = {}
+    for pid in _list_all_processes():
+        summary = _get_process_summary(pid)
+        if summary:
+            procs[pid] = summary
+            ppid = summary["ppid"]
+            if ppid not in children_map:
+                children_map[ppid] = []
+            children_map[ppid].append(pid)
+    return procs, children_map
+
+
+def _print_tree(procs, children_map, pid=1, prefix="", is_last=True):
+    """Recursively print process tree."""
+    proc = procs.get(pid)
+    if not proc:
+        return
+    connector = "└── " if is_last else "├── "
+    name = proc["name"]
+    state_code = proc.get("state", "")
+    line = f"{prefix}{connector}{_bold(name)} (PID {pid}) [{state_code}] CPU:{proc['cpu_percent']}% MEM:{_human_size(proc['memory_rss_kb'])}"
+    docker = None
+    print(line)
+
+    children = children_map.get(pid, [])
+    for i, child_pid in enumerate(children):
+        child_prefix = prefix + ("    " if is_last else "│   ")
+        _print_tree(procs, children_map, child_pid, child_prefix, i == len(children) - 1)
+
+
+# ---------------------------------------------------------------------------
+# Top mode
+# ---------------------------------------------------------------------------
+
+def _top_mode(sort_by="cpu", count=20):
+    """Interactive top-like display."""
+    try:
+        while True:
+            procs = []
+            for pid in _list_all_processes():
+                s = _get_process_summary(pid)
+                if s:
+                    procs.append(s)
+
+            if sort_by == "cpu":
+                procs.sort(key=lambda p: p["cpu_percent"], reverse=True)
+            elif sort_by == "mem":
+                procs.sort(key=lambda p: p["memory_rss_kb"], reverse=True)
+            elif sort_by == "pid":
+                procs.sort(key=lambda p: p["pid"])
+            elif sort_by == "name":
+                procs.sort(key=lambda p: p["name"].lower())
+
+            # Clear screen
+            sys.stdout.write("\033[2J\033[H")
+            sys.stdout.flush()
+
+            # Header
+            print(_bold(f"proc top — {len(procs)} processes | sort: {sort_by} | q to quit"))
+            print(_bold(f"{'PID':>7}  {'USER':<12} {'NAME':<20} {'STATE':<12} {'CPU%':>6} {'MEM':>10} {'THR':>4} {'UPTIME':>10}"))
+            print("─" * 90)
+
+            for p in procs[:count]:
+                cpu_str = f"{p['cpu_percent']:.1f}"
+                if p['cpu_percent'] > 50:
+                    cpu_str = _red(cpu_str)
+                elif p['cpu_percent'] > 10:
+                    cpu_str = _yellow(cpu_str)
+                print(f"{p['pid']:>7}  {p['user']:<12} {p['name']:<20} {p['state']:<12} {cpu_str:>6} {_human_size(p['memory_rss_kb']):>10} {p['threads']:>4} {p['uptime_human']:>10}")
+
+            time.sleep(2)
+    except KeyboardInterrupt:
+        print("\n")
+
+
+# ---------------------------------------------------------------------------
+# Search
+# ---------------------------------------------------------------------------
+
+def _search_processes(query, by="name"):
+    """Search processes by name, PID, or user."""
+    results = []
+    for pid in _list_all_processes():
+        s = _get_process_summary(pid)
+        if not s:
+            continue
+        if by == "name" and query.lower() in s["name"].lower():
+            results.append(s)
+        elif by == "pid" and str(s["pid"]) == query:
+            results.append(s)
+        elif by == "user" and query.lower() == s["user"].lower():
+            results.append(s)
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Actions: kill, pause, resume
+# ---------------------------------------------------------------------------
+
+def _kill_process(pid, sig=signal.SIGTERM):
+    proc = _get_process_summary(pid)
+    if not proc:
+        _eprint(f"Process {pid} not found.")
+        return 1
+    try:
+        os.kill(pid, sig)
+        print(f"Sent signal {sig.name} to {proc['name']} (PID {pid}).")
+        return 0
+    except PermissionError:
+        _eprint(f"Permission denied: cannot signal PID {pid}.")
+        return 1
+    except ProcessLookupError:
+        _eprint(f"Process {pid} no longer exists.")
+        return 1
+
+
+def _pause_process(pid):
+    return _kill_process(pid, signal.SIGSTOP)
+
+def _resume_process(pid):
+    return _kill_process(pid, signal.SIGCONT)
+
+
+# ---------------------------------------------------------------------------
+# Watch mode
+# ---------------------------------------------------------------------------
+
+def _watch_process(pid, interval=2):
+    """Monitor a process in real time."""
+    try:
+        while True:
+            info = _get_process_info(pid, include_ports=True)
+            if info is None:
+                _eprint(f"Process {pid} has exited.")
+                return 1
+            sys.stdout.write("\033[2J\033[H")
+            sys.stdout.flush()
+            _print_process_detail(info)
+            time.sleep(interval)
+    except KeyboardInterrupt:
+        print()
+        return 0
+
+
+# ---------------------------------------------------------------------------
+# Output
+# ---------------------------------------------------------------------------
+
+def _print_process_detail(info):
+    """Pretty-print detailed process info."""
+    print(_bold(f"Process: {info['name']} (PID {info['pid']})"))
+    print(f"  State:    {info['state']}")
+    print(f"  PPID:     {info['ppid']}")
+    print(f"  User:     {info['user']} (UID {info['uid']})")
+    print(f"  Uptime:   {info['uptime_human']}")
+    print(f"  CPU:      {info['cpu_percent']}% ({info['cpu_time']}s total)")
+    print(f"  Memory:   RSS {info['memory_rss_human']}  VIRT {info['memory_vsize_human']}")
+    if "memory_shared_kb" in info:
+        print(f"            Shared {_human_size(info['memory_shared_kb'])}")
+    print(f"  Threads:  {info['threads']}")
+    if info.get("exe"):
+        print(f"  Exe:      {info['exe']}")
+    if info.get("cmdline"):
+        print(f"  Cmdline:  {info['cmdline']}")
+    if info.get("cwd"):
+        print(f"  CWD:      {info['cwd']}")
+    if info.get("docker_container"):
+        print(f"  Docker:   {_cyan(info['docker_container'])}")
+    if info.get("cgroup"):
+        lines = info["cgroup"].splitlines()
+        print(f"  Cgroup:   {lines[0]}")
+        for l in lines[1:]:
+            print(f"            {l}")
+    if info.get("namespaces"):
+        print(f"  Namespaces:")
+        for ns, val in info["namespaces"].items():
+            print(f"    {ns}: {val}")
+    if info.get("ports"):
+        print(f"  Ports:    {', '.join(str(p) for p in sorted(info['ports']))}")
+    if info.get("sockets"):
+        print(f"  Sockets:  {len(info['sockets'])} socket(s)")
+        for s in info["sockets"][:10]:
+            print(f"    {s['protocol']}/{s['family']} :{s['local_port']}")
+    if info.get("open_files"):
+        files = [f for f in info["open_files"] if not f["target"].startswith("socket:")]
+        print(f"  Open files: {len(files)}")
+        for f in files[:20]:
+            print(f"    fd {f['fd']}: {f['target']}")
+    if info.get("environ"):
+        print(f"  Environment: {len(info['environ'])} variables")
+        for k, v in sorted(info["environ"].items())[:20]:
+            print(f"    {k}={v}")
+    if info.get("thread_ids"):
+        print(f"  Thread IDs: {', '.join(str(t) for t in info['thread_ids'][:20])}")
+        if len(info["thread_ids"]) > 20:
+            print(f"    ... and {len(info['thread_ids'])-20} more")
+
+
+def _print_process_list(procs, sort_by="cpu"):
+    """Print process list table."""
+    if sort_by == "cpu":
+        procs.sort(key=lambda p: p["cpu_percent"], reverse=True)
+    elif sort_by == "mem":
+        procs.sort(key=lambda p: p["memory_rss_kb"], reverse=True)
+    elif sort_by == "pid":
+        procs.sort(key=lambda p: p["pid"])
+    elif sort_by == "name":
+        procs.sort(key=lambda p: p["name"].lower())
+
+    print(_bold(f"{'PID':>7}  {'USER':<12} {'NAME':<20} {'STATE':<12} {'CPU%':>6} {'MEM':>10} {'THR':>4} {'UPTIME':>10}"))
+    print("─" * 90)
+    for p in procs:
+        print(f"{p['pid']:>7}  {p['user']:<12} {p['name']:<20} {p['state']:<12} {p['cpu_percent']:>6.1f} {_human_size(p['memory_rss_kb']):>10} {p['threads']:>4} {p['uptime_human']:>10}")
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+SUBCOMMANDS = {"ls", "top", "tree", "search", "kill", "pause", "resume", "watch"}
+
+def _build_parser(mode="sub"):
+    """Build parser. mode='sub' for subcommand usage, mode='pid' for direct PID."""
+    p = argparse.ArgumentParser(prog="proc",
+                                 description="Process Inspector — inspect processes via /proc.")
+    p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+    p.add_argument("--json", dest="json_output", action="store_true", help="JSON output.")
+    p.add_argument("--quiet", "-q", action="store_true")
+    p.add_argument("--verbose", "-v", action="store_true")
+    p.add_argument("--sort", choices=["cpu", "mem", "pid", "name"], default="cpu",
+                   help="Sort order for listings (default: cpu).")
+    p.add_argument("--env", action="store_true", help="Show environment variables.")
+    p.add_argument("--files", action="store_true", help="Show open files.")
+    p.add_argument("--sockets", action="store_true", help="Show sockets.")
+    p.add_argument("--ports", action="store_true", help="Show ports.")
+
+    if mode == "pid":
+        p.add_argument("pid", type=int, help="Process ID to inspect.")
+    else:
+        sub = p.add_subparsers(dest="command")
+        sub.add_parser("ls", help="List all processes.")
+
+        top_p = sub.add_parser("top", help="Interactive top-like view.")
+        top_p.add_argument("--count", type=int, default=30, help="Number of processes to show.")
+
+        tree_p = sub.add_parser("tree", help="Show process tree.")
+        tree_p.add_argument("root_pid", type=int, nargs="?", default=1, help="Root PID (default: 1).")
+
+        search_p = sub.add_parser("search", help="Search processes.")
+        search_p.add_argument("query", help="Search query.")
+        search_p.add_argument("--by", choices=["name", "pid", "user"], default="name")
+
+        kill_p = sub.add_parser("kill", help="Kill a process.")
+        kill_p.add_argument("pid", type=int)
+        kill_p.add_argument("--signal", "-s", default="TERM")
+
+        pause_p = sub.add_parser("pause", help="Pause (SIGSTOP) a process.")
+        pause_p.add_argument("pid", type=int)
+
+        resume_p = sub.add_parser("resume", help="Resume (SIGCONT) a process.")
+        resume_p.add_argument("pid", type=int)
+
+        watch_p = sub.add_parser("watch", help="Watch a process in real time.")
+        watch_p.add_argument("pid", type=int)
+        watch_p.add_argument("--interval", type=float, default=2)
+
+    return p
+
+
+def main():
+    # Detect whether first positional arg is a PID (number) or a subcommand
+    positionals = [a for a in sys.argv[1:] if not a.startswith("-")]
+    first_pos = positionals[0] if positionals else None
+    is_pid = False
+    if first_pos and first_pos not in SUBCOMMANDS:
+        try:
+            int(first_pos)
+            is_pid = True
+        except ValueError:
+            pass
+
+    if is_pid:
+        parser = _build_parser(mode="pid")
+        args = parser.parse_args()
+        pid = args.pid
+        info = _get_process_info(pid, include_env=args.env, include_open_files=args.files,
+                                  include_sockets=args.sockets, include_ports=args.ports)
+        if info is None:
+            _eprint(f"Process {pid} not found or not accessible.")
+            sys.exit(1)
+        if args.json_output:
+            print(json.dumps(info, indent=2, default=str))
+        else:
+            _print_process_detail(info)
+        sys.exit(0)
+
+    parser = _build_parser(mode="sub")
+    args = parser.parse_args()
+
+    if args.command == "ls":
+        procs = []
+        for pid in _list_all_processes():
+            s = _get_process_summary(pid)
+            if s:
+                procs.append(s)
+        if args.json_output:
+            print(json.dumps(procs, indent=2))
+        else:
+            _print_process_list(procs, args.sort)
+        sys.exit(0)
+
+    if args.command == "top":
+        _top_mode(sort_by=args.sort, count=args.count)
+        sys.exit(0)
+
+    if args.command == "tree":
+        procs, children_map = _build_process_tree()
+        root = getattr(args, "root_pid", 1)
+        if args.json_output:
+            print(json.dumps({"processes": procs, "root": root}, indent=2, default=str))
+        else:
+            _print_tree(procs, children_map, pid=root)
+        sys.exit(0)
+
+    if args.command == "search":
+        results = _search_processes(args.query, by=args.by)
+        if args.json_output:
+            print(json.dumps(results, indent=2))
+        else:
+            if results:
+                _print_process_list(results, args.sort)
+            else:
+                _eprint(f"No processes matching '{args.query}'.")
+                sys.exit(1)
+        sys.exit(0)
+
+    if args.command == "kill":
+        sig_name = getattr(args, "signal", "TERM")
+        sig = getattr(signal, f"SIG{sig_name.upper()}", signal.SIGTERM)
+        sys.exit(_kill_process(args.pid, sig))
+
+    if args.command == "pause":
+        sys.exit(_pause_process(args.pid))
+
+    if args.command == "resume":
+        sys.exit(_resume_process(args.pid))
+
+    if args.command == "watch":
+        sys.exit(_watch_process(args.pid, args.interval))
+
+    # No command given
+    parser.print_help()
+    sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()

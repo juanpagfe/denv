@@ -274,10 +274,13 @@ if $IS_UNACTIVATED; then
     echo ""
     echo "Detecting device hardware (CM5 + multi-NIC check)..."
     IS_CM5=false
-    if ssh -i "$KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=10 "$TARGET" \
-        'grep -qi "raspberry pi 5\|bcm2712" /proc/cpuinfo 2>/dev/null || [ -f /sys/firmware/devicetree/base/model ] && grep -qi "pi 5" /sys/firmware/devicetree/base/model 2>/dev/null' 2>/dev/null; then
+    CM5_INFO=$(ssh -i "$KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=10 "$TARGET" \
+        'cat /proc/cpuinfo 2>/dev/null; echo "---MODEL---"; cat /sys/firmware/devicetree/base/model 2>/dev/null || true' 2>/dev/null) || true
+    echo "  Device info snippet:"
+    echo "$CM5_INFO" | grep -iE 'model|hardware|bcm|raspberry|compute' | head -5 | sed 's/^/    /'
+    if echo "$CM5_INFO" | grep -qi 'bcm2712\|raspberry pi 5\|compute module 5\|pi5\|cm5'; then
         IS_CM5=true
-        echo "✓ Device identified as CM5 (Raspberry Pi 5 / BCM2712)."
+        echo "✓ Device identified as CM5."
     else
         echo "  Device is not a CM5."
     fi

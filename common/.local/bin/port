@@ -1,0 +1,495 @@
+#!/usr/bin/env python3
+"""port — Port Inspector: inspect, list, and manage network ports on Linux.
+
+Uses /proc/net/* and the socket API directly — no dependency on lsof, netstat, or ss.
+"""
+
+import argparse
+import json
+import os
+import pwd
+import re
+import signal
+import socket
+import struct
+import sys
+from pathlib import Path
+
+__version__ = "1.0.0"
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+_IS_TTY = sys.stdout.isatty() and os.environ.get("NO_COLOR") is None
+
+def _color(text, code):
+    if _IS_TTY:
+        return f"\033[{code}m{text}\033[0m"
+    return str(text)
+
+def _bold(t):   return _color(t, "1")
+def _green(t):  return _color(t, "32")
+def _red(t):    return _color(t, "31")
+def _yellow(t): return _color(t, "33")
+def _cyan(t):   return _color(t, "36")
+def _dim(t):    return _color(t, "2")
+
+def _eprint(*args, **kw):
+    print(*args, file=sys.stderr, **kw)
+
+# TCP state mapping from kernel
+TCP_STATES = {
+    "01": "ESTABLISHED", "02": "SYN_SENT", "03": "SYN_RECV",
+    "04": "FIN_WAIT1", "05": "FIN_WAIT2", "06": "TIME_WAIT",
+    "07": "CLOSE", "08": "CLOSE_WAIT", "09": "LAST_ACK",
+    "0A": "LISTEN", "0B": "CLOSING",
+}
+
+# ---------------------------------------------------------------------------
+# /proc/net parsing
+# ---------------------------------------------------------------------------
+
+def _parse_hex_addr(hex_addr, family):
+    """Convert hex address:port from /proc/net/* to (ip_str, port)."""
+    addr_hex, port_hex = hex_addr.split(":")
+    port = int(port_hex, 16)
+    if family == socket.AF_INET:
+        addr_int = int(addr_hex, 16)
+        ip = socket.inet_ntoa(struct.pack("<I", addr_int))
+    else:  # AF_INET6
+        # /proc stores in groups of 4 bytes, little-endian per group
+        groups = [addr_hex[i:i+8] for i in range(0, 32, 8)]
+        packed = b"".join(struct.pack("<I", int(g, 16)) for g in groups)
+        ip = socket.inet_ntop(socket.AF_INET6, packed)
+    return ip, port
+
+
+def _read_proc_net(proto, family):
+    """Read entries from /proc/net/{tcp,udp,tcp6,udp6}."""
+    suffix = "6" if family == socket.AF_INET6 else ""
+    path = f"/proc/net/{proto}{suffix}"
+    entries = []
+    try:
+        with open(path) as f:
+            lines = f.readlines()[1:]  # skip header
+    except FileNotFoundError:
+        return entries
+
+    for line in lines:
+        parts = line.split()
+        if len(parts) < 10:
+            continue
+        local_addr, local_port = _parse_hex_addr(parts[1], family)
+        remote_addr, remote_port = _parse_hex_addr(parts[2], family)
+        state_hex = parts[3].upper()
+        state = TCP_STATES.get(state_hex, state_hex) if proto == "tcp" else "UNCONN" if remote_port == 0 else "ESTABLISHED"
+        inode = int(parts[9])
+        entries.append({
+            "protocol": proto.upper() + ("6" if suffix else ""),
+            "local_address": local_addr,
+            "local_port": local_port,
+            "remote_address": remote_addr,
+            "remote_port": remote_port,
+            "state": state,
+            "inode": inode,
+            "family": "IPv6" if family == socket.AF_INET6 else "IPv4",
+        })
+    return entries
+
+
+def _get_all_sockets():
+    """Collect all TCP/UDP sockets for IPv4 and IPv6."""
+    results = []
+    for proto in ("tcp", "udp"):
+        for family in (socket.AF_INET, socket.AF_INET6):
+            results.extend(_read_proc_net(proto, family))
+    return results
+
+
+# ---------------------------------------------------------------------------
+# PID / process resolution via /proc
+# ---------------------------------------------------------------------------
+
+def _build_inode_pid_map():
+    """Walk /proc/*/fd to map socket inodes -> (pid, exe, cmdline, user)."""
+    inode_map = {}
+    for entry in os.listdir("/proc"):
+        if not entry.isdigit():
+            continue
+        pid = int(entry)
+        fd_dir = f"/proc/{pid}/fd"
+        try:
+            fds = os.listdir(fd_dir)
+        except PermissionError:
+            continue
+        except FileNotFoundError:
+            continue
+        for fd in fds:
+            try:
+                link = os.readlink(f"{fd_dir}/{fd}")
+            except (PermissionError, FileNotFoundError, OSError):
+                continue
+            m = re.match(r"socket:\[(\d+)\]", link)
+            if m:
+                inode = int(m.group(1))
+                if inode not in inode_map:
+                    info = _get_process_info(pid)
+                    inode_map[inode] = info
+    return inode_map
+
+
+def _get_process_info(pid):
+    """Gather process metadata from /proc/<pid>."""
+    info = {"pid": pid, "name": "", "user": "", "exe": "", "cmdline": ""}
+    try:
+        with open(f"/proc/{pid}/comm") as f:
+            info["name"] = f.read().strip()
+    except (FileNotFoundError, PermissionError):
+        pass
+    try:
+        info["exe"] = os.readlink(f"/proc/{pid}/exe")
+    except (FileNotFoundError, PermissionError, OSError):
+        pass
+    try:
+        with open(f"/proc/{pid}/cmdline") as f:
+            info["cmdline"] = f.read().replace("\0", " ").strip()
+    except (FileNotFoundError, PermissionError):
+        pass
+    try:
+        with open(f"/proc/{pid}/status") as f:
+            for line in f:
+                if line.startswith("Uid:"):
+                    uid = int(line.split()[1])
+                    try:
+                        info["user"] = pwd.getpwuid(uid).pw_name
+                    except KeyError:
+                        info["user"] = str(uid)
+                    break
+    except (FileNotFoundError, PermissionError):
+        pass
+    return info
+
+
+def _detect_docker_container(pid):
+    """Try to detect if a process is running inside a Docker container."""
+    try:
+        cgroup_path = f"/proc/{pid}/cgroup"
+        with open(cgroup_path) as f:
+            content = f.read()
+        for line in content.splitlines():
+            if "docker" in line or "containerd" in line:
+                parts = line.split("/")
+                container_id = parts[-1][:12] if parts else ""
+                return container_id
+        # Also check /proc/<pid>/cpuset or mountinfo
+        with open(f"/proc/{pid}/mountinfo") as f:
+            minfo = f.read()
+        if "docker" in minfo or "/containers/" in minfo:
+            return "container"
+    except (FileNotFoundError, PermissionError):
+        pass
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Core logic
+# ---------------------------------------------------------------------------
+
+def _enrich_sockets(sockets, inode_map):
+    """Attach process info to each socket entry."""
+    for s in sockets:
+        proc_info = inode_map.get(s["inode"])
+        if proc_info:
+            s["pid"] = proc_info["pid"]
+            s["process"] = proc_info["name"]
+            s["user"] = proc_info["user"]
+            s["exe"] = proc_info["exe"]
+            s["cmdline"] = proc_info["cmdline"]
+            docker = _detect_docker_container(proc_info["pid"])
+            if docker:
+                s["docker_container"] = docker
+        else:
+            s["pid"] = None
+            s["process"] = ""
+            s["user"] = ""
+            s["exe"] = ""
+            s["cmdline"] = ""
+    return sockets
+
+
+def _filter_sockets(sockets, ports=None, proto=None, listening=False, active=False):
+    """Filter sockets by criteria."""
+    result = sockets
+    if ports:
+        result = [s for s in result if s["local_port"] in ports]
+    if proto:
+        proto_upper = proto.upper()
+        result = [s for s in result if s["protocol"].startswith(proto_upper)]
+    if listening:
+        result = [s for s in result if s["state"] == "LISTEN" or (s["protocol"].startswith("UDP") and s["remote_port"] == 0)]
+    if active:
+        result = [s for s in result if s["state"] == "ESTABLISHED"]
+    return result
+
+
+def _detect_conflicts(sockets):
+    """Find ports bound by multiple processes."""
+    port_procs = {}
+    for s in sockets:
+        if s["state"] in ("LISTEN",) or (s["protocol"].startswith("UDP") and s["remote_port"] == 0):
+            key = (s["local_port"], s["protocol"])
+            if key not in port_procs:
+                port_procs[key] = []
+            if s["pid"] and s["pid"] not in [p["pid"] for p in port_procs[key]]:
+                port_procs[key].append({"pid": s["pid"], "process": s["process"]})
+    conflicts = {k: v for k, v in port_procs.items() if len(v) > 1}
+    return conflicts
+
+
+# ---------------------------------------------------------------------------
+# Output
+# ---------------------------------------------------------------------------
+
+def _print_table(sockets, verbose=False):
+    """Human-friendly table output."""
+    if not sockets:
+        _eprint("No matching sockets found.")
+        return
+
+    headers = ["PROTO", "LOCAL ADDRESS", "PORT", "REMOTE ADDRESS", "STATE", "PID", "PROCESS", "USER"]
+    if verbose:
+        headers.append("EXE")
+        headers.append("CMDLINE")
+
+    rows = []
+    for s in sockets:
+        row = [
+            s["protocol"],
+            s["local_address"],
+            str(s["local_port"]),
+            f"{s['remote_address']}:{s['remote_port']}" if s["remote_port"] else "",
+            s["state"],
+            str(s["pid"]) if s["pid"] else "-",
+            s["process"] or "-",
+            s["user"] or "-",
+        ]
+        if verbose:
+            row.append(s.get("exe", "") or "-")
+            row.append(s.get("cmdline", "") or "-")
+        docker = s.get("docker_container")
+        if docker:
+            row[6] = f"{row[6]} [docker:{docker}]"
+        rows.append(row)
+
+    col_widths = [len(h) for h in headers]
+    for row in rows:
+        for i, cell in enumerate(row):
+            if i < len(col_widths):
+                col_widths[i] = max(col_widths[i], len(cell))
+
+    header_line = "  ".join(h.ljust(col_widths[i]) for i, h in enumerate(headers))
+    print(_bold(header_line))
+    for row in rows:
+        parts = []
+        for i, cell in enumerate(row):
+            if i < len(col_widths):
+                text = cell.ljust(col_widths[i])
+            else:
+                text = cell
+            parts.append(text)
+        line = "  ".join(parts)
+        # Colorize state
+        state_val = row[4] if len(row) > 4 else ""
+        if state_val == "LISTEN":
+            print(line.replace(state_val, _green(state_val), 1))
+        elif state_val == "ESTABLISHED":
+            print(line.replace(state_val, _cyan(state_val), 1))
+        elif state_val in ("TIME_WAIT", "CLOSE_WAIT", "CLOSING"):
+            print(line.replace(state_val, _yellow(state_val), 1))
+        else:
+            print(line)
+
+
+def _print_json(data):
+    """JSON output for scripting."""
+    # Remove inode from output — internal detail
+    cleaned = []
+    for entry in data:
+        e = {k: v for k, v in entry.items() if k != "inode"}
+        cleaned.append(e)
+    print(json.dumps(cleaned, indent=2))
+
+
+def _print_conflicts(conflicts):
+    if not conflicts:
+        return
+    print()
+    print(_red(_bold("⚠  Port conflicts detected:")))
+    for (port, proto), procs in conflicts.items():
+        names = ", ".join(f"{p['process']}(PID {p['pid']})" for p in procs)
+        print(f"  {proto} :{port} → {names}")
+
+
+# ---------------------------------------------------------------------------
+# Actions: kill / free
+# ---------------------------------------------------------------------------
+
+def _kill_port(port, proto_filter=None, force=False):
+    """Kill the process(es) using a port."""
+    sockets = _get_all_sockets()
+    inode_map = _build_inode_pid_map()
+    sockets = _enrich_sockets(sockets, inode_map)
+    targets = [s for s in sockets if s["local_port"] == port and s.get("pid")]
+    if proto_filter:
+        targets = [s for s in targets if s["protocol"].startswith(proto_filter.upper())]
+
+    if not targets:
+        _eprint(f"No process found on port {port}.")
+        return 1
+
+    pids_seen = set()
+    for s in targets:
+        pid = s["pid"]
+        if pid in pids_seen:
+            continue
+        pids_seen.add(pid)
+        proc_name = s["process"] or "unknown"
+        if not force:
+            answer = input(f"Kill {proc_name} (PID {pid}) on port {port}? [y/N] ").strip().lower()
+            if answer not in ("y", "yes"):
+                _eprint("Skipped.")
+                continue
+        try:
+            os.kill(pid, signal.SIGTERM)
+            print(f"Sent SIGTERM to {proc_name} (PID {pid}).")
+        except PermissionError:
+            _eprint(f"Permission denied: cannot kill PID {pid}. Try with sudo.")
+            return 1
+        except ProcessLookupError:
+            _eprint(f"Process {pid} already gone.")
+    return 0
+
+
+def _free_port(port, proto_filter=None, force=False):
+    """Free a port by killing all processes using it."""
+    return _kill_port(port, proto_filter, force)
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+SUBCOMMANDS = {"ls", "kill", "free"}
+
+def _build_parser(mode="sub"):
+    """Build parser. mode='sub' for subcommands, mode='ports' for direct port query."""
+    parser = argparse.ArgumentParser(
+        prog="port",
+        description="Port Inspector — inspect, list, and manage network ports.",
+    )
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+    parser.add_argument("--json", dest="json_output", action="store_true", help="Output in JSON format.")
+    parser.add_argument("--quiet", "-q", action="store_true", help="Suppress non-essential output.")
+    parser.add_argument("--verbose", "-v", action="store_true", help="Show extra details (exe, cmdline).")
+    parser.add_argument("--tcp", action="store_true", help="Show TCP sockets only.")
+    parser.add_argument("--udp", action="store_true", help="Show UDP sockets only.")
+    parser.add_argument("--listening", "-l", action="store_true", help="Show only listening sockets.")
+    parser.add_argument("--active", "-a", action="store_true", help="Show only active (ESTABLISHED) connections.")
+
+    if mode == "ports":
+        parser.add_argument("ports", nargs="+", type=int, help="Port number(s) to inspect.")
+    else:
+        sub = parser.add_subparsers(dest="command")
+        sub.add_parser("ls", help="List all ports in use.")
+
+        kill_p = sub.add_parser("kill", help="Kill the process using a port.")
+        kill_p.add_argument("port", type=int, help="Port number.")
+        kill_p.add_argument("--force", "-f", action="store_true", help="Skip confirmation.")
+
+        free_p = sub.add_parser("free", help="Free a port (alias for kill).")
+        free_p.add_argument("port", type=int, help="Port number.")
+        free_p.add_argument("--force", "-f", action="store_true", help="Skip confirmation.")
+
+    return parser
+
+
+def main():
+    # Detect whether first positional arg is a port number or a subcommand
+    positionals = [a for a in sys.argv[1:] if not a.startswith("-")]
+    first_pos = positionals[0] if positionals else None
+    is_ports = False
+    if first_pos and first_pos not in SUBCOMMANDS:
+        try:
+            int(first_pos)
+            is_ports = True
+        except ValueError:
+            pass
+
+    if is_ports:
+        parser = _build_parser(mode="ports")
+        args = parser.parse_args()
+
+        proto_filter = None
+        if args.tcp:
+            proto_filter = "TCP"
+        elif args.udp:
+            proto_filter = "UDP"
+
+        sockets = _get_all_sockets()
+        inode_map = _build_inode_pid_map()
+        sockets = _enrich_sockets(sockets, inode_map)
+
+        ports = set(args.ports)
+        filtered = _filter_sockets(sockets, ports=ports, proto=proto_filter,
+                                    listening=args.listening, active=args.active)
+
+        if args.json_output:
+            _print_json(filtered)
+        else:
+            _print_table(filtered, verbose=args.verbose)
+            conflicts = _detect_conflicts(sockets)
+            if conflicts and not args.quiet:
+                _print_conflicts(conflicts)
+
+        found_ports = {s["local_port"] for s in filtered}
+        missing = ports - found_ports
+        if missing and not found_ports:
+            sys.exit(1)  # All ports free
+        sys.exit(0)
+
+    parser = _build_parser(mode="sub")
+    args = parser.parse_args()
+
+    proto_filter = None
+    if args.tcp:
+        proto_filter = "TCP"
+    elif args.udp:
+        proto_filter = "UDP"
+
+    if args.command == "kill":
+        sys.exit(_kill_port(args.port, proto_filter, getattr(args, "force", False)))
+    elif args.command == "free":
+        sys.exit(_free_port(args.port, proto_filter, getattr(args, "force", False)))
+
+    # ls or no command: list all
+    sockets = _get_all_sockets()
+    inode_map = _build_inode_pid_map()
+    sockets = _enrich_sockets(sockets, inode_map)
+
+    filtered = _filter_sockets(sockets, proto=proto_filter,
+                                listening=args.listening, active=args.active)
+
+    if args.json_output:
+        _print_json(filtered)
+    else:
+        _print_table(filtered, verbose=args.verbose)
+        conflicts = _detect_conflicts(sockets)
+        if conflicts and not args.quiet:
+            _print_conflicts(conflicts)
+
+    sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()
