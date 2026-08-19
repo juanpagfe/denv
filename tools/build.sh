@@ -19,10 +19,10 @@ for tool in "${RUST_TOOLS[@]}"; do
         if cargo build --release --manifest-path "$SCRIPT_DIR/$tool/Cargo.toml" 2>&1; then
             cp "$SCRIPT_DIR/$tool/target/release/$tool" "$OUT_DIR/$tool"
             echo "  ✓ $tool built successfully"
-            ((built++))
+            built=$((built + 1))
         else
             echo "  ✗ $tool failed to build"
-            ((failed++))
+            failed=$((failed + 1))
         fi
     fi
 done
@@ -33,10 +33,10 @@ for tool in "${GO_TOOLS[@]}"; do
         echo "Building $tool (Go)..."
         if (cd "$SCRIPT_DIR/$tool" && go build -o "$OUT_DIR/$tool" .) 2>&1; then
             echo "  ✓ $tool built successfully"
-            ((built++))
+            built=$((built + 1))
         else
             echo "  ✗ $tool failed to build"
-            ((failed++))
+            failed=$((failed + 1))
         fi
     fi
 done
