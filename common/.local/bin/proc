@@ -581,7 +581,29 @@ def _print_process_detail(info):
             print(f"    ... and {len(info['thread_ids'])-20} more")
 
 
-def _print_process_list(procs, sort_by="cpu"):
+def _print_process_extras(info):
+    """Print extra detail (ports, sockets, files, env) beneath a process row."""
+    if info.get("ports"):
+        print(f"           └─ ports: {', '.join(str(p) for p in sorted(info['ports']))}")
+    if info.get("sockets"):
+        socks = info["sockets"]
+        summary = ", ".join(f"{s['protocol']}/{s['family']} :{s['local_port']}" for s in socks[:5])
+        extra = f" (+{len(socks)-5} more)" if len(socks) > 5 else ""
+        print(f"           └─ sockets: {summary}{extra}")
+    if info.get("open_files"):
+        files = [f for f in info["open_files"] if not f["target"].startswith("socket:")]
+        if files:
+            shown = ", ".join(f["target"] for f in files[:5])
+            extra = f" (+{len(files)-5} more)" if len(files) > 5 else ""
+            print(f"           └─ files: {shown}{extra}")
+    if info.get("environ"):
+        env = info["environ"]
+        shown = ", ".join(f"{k}={v[:30]}" for k, v in sorted(env.items())[:5])
+        extra = f" (+{len(env)-5} more)" if len(env) > 5 else ""
+        print(f"           └─ env: {shown}{extra}")
+
+
+def _print_process_list(procs, sort_by="cpu", show_extras=False):
     """Print process list table."""
     if sort_by == "cpu":
         procs.sort(key=lambda p: p["cpu_percent"], reverse=True)
@@ -596,6 +618,8 @@ def _print_process_list(procs, sort_by="cpu"):
     print("─" * 90)
     for p in procs:
         print(f"{p['pid']:>7}  {p['user']:<12} {p['name']:<20} {p['state']:<12} {p['cpu_percent']:>6.1f} {_human_size(p['memory_rss_kb']):>10} {p['threads']:>4} {p['uptime_human']:>10}")
+        if show_extras:
+            _print_process_extras(p)
 
 
 # ---------------------------------------------------------------------------
@@ -623,7 +647,16 @@ def _build_parser(mode="sub"):
         p.add_argument("pid", type=int, help="Process ID to inspect.")
     else:
         sub = p.add_subparsers(dest="command")
-        sub.add_parser("ls", help="List all processes.")
+
+        # Detail flags for subcommands that support them
+        def _add_detail_flags(sp):
+            sp.add_argument("--env", action="store_true", help="Show environment variables.")
+            sp.add_argument("--files", action="store_true", help="Show open files.")
+            sp.add_argument("--sockets", action="store_true", help="Show sockets.")
+            sp.add_argument("--ports", action="store_true", help="Show ports.")
+
+        ls_p = sub.add_parser("ls", help="List all processes.")
+        _add_detail_flags(ls_p)
 
         top_p = sub.add_parser("top", help="Interactive top-like view.")
         top_p.add_argument("--count", type=int, default=30, help="Number of processes to show.")
@@ -634,6 +667,7 @@ def _build_parser(mode="sub"):
         search_p = sub.add_parser("search", help="Search processes.")
         search_p.add_argument("query", help="Search query.")
         search_p.add_argument("--by", choices=["name", "pid", "user"], default="name")
+        _add_detail_flags(search_p)
 
         kill_p = sub.add_parser("kill", help="Kill a process.")
         kill_p.add_argument("pid", type=int)
@@ -682,16 +716,25 @@ def main():
     parser = _build_parser(mode="sub")
     args = parser.parse_args()
 
+    _wants_detail = (getattr(args, "env", False) or getattr(args, "files", False)
+                     or getattr(args, "sockets", False) or getattr(args, "ports", False))
+
     if args.command == "ls":
         procs = []
         for pid in _list_all_processes():
-            s = _get_process_summary(pid)
+            if _wants_detail:
+                s = _get_process_info(pid, include_env=args.env,
+                                      include_open_files=args.files,
+                                      include_sockets=args.sockets,
+                                      include_ports=args.ports)
+            else:
+                s = _get_process_summary(pid)
             if s:
                 procs.append(s)
         if args.json_output:
-            print(json.dumps(procs, indent=2))
+            print(json.dumps(procs, indent=2, default=str))
         else:
-            _print_process_list(procs, args.sort)
+            _print_process_list(procs, args.sort, show_extras=_wants_detail)
         sys.exit(0)
 
     if args.command == "top":
@@ -709,11 +752,21 @@ def main():
 
     if args.command == "search":
         results = _search_processes(args.query, by=args.by)
+        if _wants_detail and results:
+            # Enrich matched summaries with full detail
+            detailed = []
+            for s in results:
+                info = _get_process_info(s["pid"], include_env=args.env,
+                                         include_open_files=args.files,
+                                         include_sockets=args.sockets,
+                                         include_ports=args.ports)
+                detailed.append(info if info else s)
+            results = detailed
         if args.json_output:
-            print(json.dumps(results, indent=2))
+            print(json.dumps(results, indent=2, default=str))
         else:
             if results:
-                _print_process_list(results, args.sort)
+                _print_process_list(results, args.sort, show_extras=_wants_detail)
             else:
                 _eprint(f"No processes matching '{args.query}'.")
                 sys.exit(1)
