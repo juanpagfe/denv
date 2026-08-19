@@ -35,6 +35,20 @@ fi
 
 cp -f common/.local/bin/* ~/.local/bin
 
+#Build and install compiled tools
+if echo "$@" | grep -q -- "--skip-tools"; then
+    echo "Skipping compiled tools (--skip-tools)"
+else
+    if [ -f tools/build.sh ]; then
+        echo "Building compiled tools..."
+        bash tools/build.sh
+        if [ -d tools/bin ]; then
+            cp -f tools/bin/* ~/.local/bin/
+            echo "Compiled tools installed"
+        fi
+    fi
+fi
+
 #Merge environment files
 if [ ! -f envrc ]; then
     echo "Generating envrc file"

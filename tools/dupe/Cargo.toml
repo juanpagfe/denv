@@ -1,0 +1,26 @@
+[package]
+name = "dupe"
+version = "0.1.0"
+edition = "2021"
+description = "Find and manage duplicate files efficiently and safely"
+
+[dependencies]
+blake3 = "1"
+sha2 = "0.10"
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_yaml = "0.9"
+serde_json = "1"
+rayon = "1"
+indicatif = { version = "0.17", features = ["rayon"] }
+csv = "1"
+crossterm = "0.28"
+ctrlc = { version = "3", features = ["termination"] }
+dirs = "5"
+num_cpus = "1"
+bytesize = "1"
+
+[profile.release]
+opt-level = 3
+lto = true
+strip = true

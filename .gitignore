@@ -1,0 +1,6 @@
+# Compiled tool binaries
+tools/bin/
+tools/*/target/
+
+# Environment generated files
+envrc
