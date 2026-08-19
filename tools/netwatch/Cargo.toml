@@ -1,0 +1,23 @@
+[package]
+name = "netwatch"
+version = "0.1.0"
+edition = "2021"
+description = "Network activity monitor: see what processes are communicating, with whom, and how much traffic"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_yaml = "0.9"
+serde_json = "1"
+csv = "1"
+ratatui = "0.29"
+crossterm = "0.28"
+ctrlc = { version = "3", features = ["termination"] }
+dirs = "5"
+bytesize = "1"
+dns-lookup = "2"
+
+[profile.release]
+opt-level = 3
+lto = true
+strip = true
