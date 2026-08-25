@@ -89,7 +89,7 @@ fi
 
 if ! command -v sshpass &>/dev/null; then
     echo "Error: sshpass is not installed."
-    echo "Install it with: sudo apt install sshpass (Linux) or brew install sshpass (Mac)"
+    echo "Install it with: sudo apt install sshpass"
     exit 1
 fi
 

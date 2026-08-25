@@ -6,31 +6,30 @@
 #                                                                                             #
 ###############################################################################################
 
-RED='\033[31m'
-GREEN='\033[32m'
-YELLOW='\033[33m'
-BLUE='\033[34m'
-NC='\033[0m'
+RED=$'\033[31m'
+GREEN=$'\033[32m'
+YELLOW=$'\033[33m'
+BLUE=$'\033[34m'
+NC=$'\033[0m'
 
-export GOPATH=$HOME/Develop/go
-export PATH=$PATH:/usr/local/go/bin:$GOPATH/bin
-export HOME_PATH_1000=$(eval echo ~$USER)
-export PATH=$PATH:$HOME_PATH_1000/.local/bin
+export GOPATH="$HOME/Develop/go"
+export PATH="$PATH:/usr/local/go/bin:$GOPATH/bin"
+export HOME_PATH_1000="$HOME"
+export PATH="$PATH:$HOME_PATH_1000/.local/bin"
 export PATH="$PATH:/opt/nvim-linux64/bin"
-export PATH=$PATH:/usr/local/go/bin
-export PATH=$PATH:/home/jpgarcia/.cargo/bin
-export XDG_DATA_DIRS="/var/lib/flatpak/exports/share:/home/jpgarcia/.local/share/flatpak/exports/share:$XDG_DATA_DIRS"
+export PATH="$PATH:$HOME/.cargo/bin"
+export XDG_DATA_DIRS="/var/lib/flatpak/exports/share:$HOME/.local/share/flatpak/exports/share:$XDG_DATA_DIRS"
 export TERM=xterm-256color
 export MANPAGER="nvim +Man!"
-
-export MACHINE=$(get_machine)
 
 #Starts an http server on the current directory (Default port: 8000)
 alias www='python3 -m http.server'
 
 alias lsiptables='sudo iptables -L -n -v'
 
-setxkbmap -layout us -model pc105 -variant altgr-intl -option compose:ralt,terminate:ctrl_alt_bksp
+if [[ -n "${DISPLAY:-}" ]]; then
+    setxkbmap -layout us -model pc105 -variant altgr-intl -option compose:ralt,terminate:ctrl_alt_bksp
+fi
 
 ###############################################################################################
 #                                                                                             #
@@ -59,10 +58,10 @@ alias hs='history | grep'
 alias l='ls -lah'
 
 # Make and change directory at once
-alias mkcd='_(){ mkdir -p $1; cd $1; }; _'
+mkcd() { mkdir -p "$1" && cd "$1"; }
 
 # fast find
-alias ff='find . -name $1'
+ff() { find . -name "$1"; }
 
 # System
 alias reboot='sudo /sbin/reboot'
@@ -70,8 +69,9 @@ alias poweroff='sudo /sbin/poweroff'
 alias halt='sudo /sbin/halt'
 alias shutdown='sudo /sbin/shutdown'
 
-tmux=$(which tmux)
-alias tmux="$tmux -2"
+if command -v tmux &>/dev/null; then
+    alias tmux="$(command -v tmux) -2"
+fi
 
 alias vim='nvim'
 alias prime-run='env __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia'
@@ -115,35 +115,33 @@ function fzf_history_picker() {
 
 #Create file with random base64 content
 function crfile() {
-  wanted_size=$(dehumanize $2)
+  wanted_size=$(dehumanize "$2")
   file_size=$((((wanted_size/12)+1)*12 ))
   read_size=$((file_size*3/4))
-  dd if=/dev/urandom bs=$read_size count=1 | base64 > $1
-  truncate -s "$wanted_size" $1
+  dd if=/dev/urandom bs="$read_size" count=1 2>/dev/null | base64 > "$1"
+  truncate -s "$wanted_size" "$1"
 }
 
 function rt() {
-  exec zsh -l
+  exec "$SHELL" -l
 }
 
-#Setup home xrandr environment if i3 is set
+#Setup home xrandr environment (requires i3)
 function sethome() {
-#    if pgrep -x "i3" > /dev/null
-#    then
+    if ! pgrep -x "i3" > /dev/null; then
+        echo "i3 is not running"
+        return 1
+    fi
     xrandr --output eDP-1-1 --mode 3072x1920 --scale 0.7x0.7 --pos 1920x0 --rotate normal --output HDMI-1-1 --primary --mode 1920x1080 --pos 0x0 --rotate normal
-#    else
-#        echo "i3 is not running"
-#    fi
 }
 
-#Setup alone xrandr environment if i3 is set
+#Setup alone xrandr environment (requires i3)
 function setalone() {
-#    if pgrep -x "i3" > /dev/null
-#    then
+    if ! pgrep -x "i3" > /dev/null; then
+        echo "i3 is not running"
+        return 1
+    fi
     xrandr --output eDP-1-1 --mode 3072x1920 --scale 0.7x0.7 --pos 0x0 --rotate normal --output HDMI-1-1 --off --output DP-1 --off
-#    else
-#        echo "i3 is not running"
-#    fi
 }
 
 # Display environment configuration files
@@ -151,20 +149,20 @@ function catenv() {
   if [ -z "$1" ]; then
     cat /etc/envrc
   else
-    acat=$(alias | grep $1)
+    acat=$(alias | grep "$1")
     if [ -z "$acat" ]; then
-      fcat=$(declare -f $1)
+      fcat=$(declare -f "$1")
       if [ -z "$fcat" ]; then
         if [ -f "$HOME_PATH_1000/.local/bin/$1" ]; then
             echo "${GREEN}Executable File${NC}"
-            cat $HOME_PATH_1000/.local/bin/$1
+            cat "$HOME_PATH_1000/.local/bin/$1"
         else
             echo "${GREEN}Not an alias nor a function. Regex search:${NC}"
-            cat /etc/envrc | grep $1
+            grep "$1" /etc/envrc
         fi
       else
         echo "${GREEN}Function${NC}"
-        echo $fcat
+        echo "$fcat"
       fi
     else
       echo "${GREEN}Alias${NC}"
@@ -174,7 +172,7 @@ function catenv() {
 }
 
 function uploadenv() {
-  host=$1
+  host="$1"
   name="${1%@*}"
   if [ -z "$host" ]; then
     echo "You need to specify the host (eg. pi@pi0.local)"
@@ -191,36 +189,36 @@ function uploadenv() {
     return
   fi
 
-  scp /etc/envrc $1:/home/$name
-  ssh $1 -T <<ENDSSH
+  scp /etc/envrc "$host:/home/$name"
+  ssh "$host" -T <<ENDSSH
       sudo mv ~/envrc /etc/envrc
       . /etc/envrc
       updatenv
 ENDSSH
-  echo "Environment shared and updated in $1"
+  echo "Environment shared and updated in $host"
 }
 
 function updatenv(){
   ENVRC_TEXT=". /etc/envrc"
-  if [[ $(grep -L "$ENVRC_TEXT" ~/.bashrc) ]]; then
-    echo $ENVRC_TEXT | sudo tee -a ~/.bashrc
+  if ! grep -qF "$ENVRC_TEXT" ~/.bashrc 2>/dev/null; then
+    echo "$ENVRC_TEXT" | sudo tee -a ~/.bashrc
   fi
 
   if [ -f ~/.zshrc ]; then
-      if [[ $(grep -L "$ENVRC_TEXT" ~/.zshrc) ]]; then
-          echo $ENVRC_TEXT | sudo tee -a ~/.zshrc
+      if ! grep -qF "$ENVRC_TEXT" ~/.zshrc 2>/dev/null; then
+          echo "$ENVRC_TEXT" | sudo tee -a ~/.zshrc
       fi
   fi
 
   if sudo test -f /root/.bashrc; then
-    if [[ $(sudo grep -L "$ENVRC_TEXT" /root/.bashrc) ]]; then
-      echo $ENVRC_TEXT | sudo tee -a /root/.bashrc
+    if ! sudo grep -qF "$ENVRC_TEXT" /root/.bashrc 2>/dev/null; then
+      echo "$ENVRC_TEXT" | sudo tee -a /root/.bashrc
     fi
   fi
 
   if sudo test -f /root/.zshrc; then
-    if [[ $(sudo grep -L "$ENVRC_TEXT" /root/.zshrc) ]]; then
-        echo $ENVRC_TEXT | sudo tee -a /root/.zshrc
+    if ! sudo grep -qF "$ENVRC_TEXT" /root/.zshrc 2>/dev/null; then
+        echo "$ENVRC_TEXT" | sudo tee -a /root/.zshrc
     fi
   fi
 

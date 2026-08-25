@@ -1,12 +1,5 @@
 #!/bin/bash
 
-MACHINE=$(get_machine)
-
-if [[ "$MACHINE" != "Linux" ]]; then
-    echo "This program only works in Linux systems"
-    exit 1
-fi
-
 usage() {
   echo "Usage: $0 <protocol> <port>"
   echo "Options:"

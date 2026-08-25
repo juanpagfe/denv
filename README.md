@@ -1,7 +1,7 @@
 # Denv
 
 `denv` is a personal collection of shell environment files, configuration 
-snippets and utility scripts used to bootstrap Linux or macOS systems.
+snippets and utility scripts used to bootstrap Linux systems.
 
 The project provides an install script that copies configuration files to 
 `$HOME`, installs dependencies and generates a single `/etc/envrc` file from 
@@ -19,8 +19,8 @@ common/.local/bin - Helper scripts (tmux sessionizer, network tools, etc.)
 rc/               - Additional dotfiles copied to `$HOME`
 ```
 
-The directories `linux/` and `mac/` are reserved for platform specific
-configuration which can be placed under `.config` or other paths if needed.
+The `linux/` directory contains platform specific configuration which is
+placed under `.config` during installation.
 
 ## Usage
 
@@ -30,8 +30,7 @@ Run the install script from the repository root:
 ./install
 ```
 
-The script detects the platform and installs required packages via `apt-get` or
-`brew`.
+The script installs required packages via `apt-get`.
 
 Once completed you can source `/etc/envrc` from your shell (`.bashrc`, `zshrc`,
 etc.) to enable the provided aliases and functions:

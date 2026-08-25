@@ -57,7 +57,7 @@ _DEFAULT_CONFIG_YAML = """\
 # Terminal bell character (\\a) on timer completion.
 bell: true
 
-# Desktop notification via notify-send (Linux) / osascript (macOS).
+# Desktop notification via notify-send.
 desktop: true
 
 # ── Sound ──────────────────────────────────────────────────────────────────

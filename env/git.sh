@@ -36,16 +36,16 @@ alias gprom='git pull --rebase origin main'
 # Git push to origin aliases
 alias gpush='git push origin'
 alias gpod='git push origin dev'
-alias gpom='git push origin master'
+alias gpom='git push origin main'
 
 # Git push to upstream aliases
 alias gpud='git push upstream dev'
-alias gpum='git push upstream master'
+alias gpum='git push upstream main'
 
 # Git stash aliases
 alias gsl='git stash list'
 alias gsp='git stash pop'
-alias gss='git stash save'
+alias gss='git stash push'
 
 # Git diff and log aliases
 alias gd='git diff --color-words'
