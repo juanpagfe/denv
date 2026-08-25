@@ -1,42 +1,42 @@
 general {
-	colors = true
-	interval = 1
-	color_good = "#989898"
-	color_degraded = "#8c7f22"
-	color_bad = "#be2422"
+    colors = true
+    interval = 1
+    color_good = "#989898"
+    color_degraded = "#8c7f22"
+    color_bad = "#be2422"
 }
 
 order += "wireless _first_"
 wireless _first_ {
     format_up = " 📶%quality » %essid "
-        format_down = ""
+    format_down = ""
 }
 
 order += "ethernet _first_"
 ethernet _first_ {
-	format_up = "🔌"
-	format_down = ""
+    format_up = "🔌"
+    format_down = ""
 }
 
 order += "battery all"
 battery all {
-	format = "%status %percentage %remaining"
-	status_chr = "⚡"
-	status_bat = "🔋"
+    format = "%status %percentage %remaining"
+    status_chr = "⚡"
+    status_bat = "🔋"
     status_unk = "🔌"
     status_full = "🔌"
-	low_threshold = 11
-	threshold_type = percentage
-	integer_battery_capacity = true
-	last_full_capacity = true
-	hide_seconds = true
+    low_threshold = 11
+    threshold_type = percentage
+    integer_battery_capacity = true
+    last_full_capacity = true
+    hide_seconds = true
 }
 
 order += "cpu_usage"
 order += "cpu_temperature 0"
 cpu_usage {
     format = "CPU: %usage"
-        separator = false
+    separator = false
 }
 cpu_temperature 0 {
     format = "%degrees°C"
@@ -54,11 +54,11 @@ disk "/" {
 
 order += "volume master"
 volume master {
-	device = "default"
-	mixer = "Master"
-	mixer_idx = 0
-	format = "🔊 %volume"
-	format_muted = "🔇"
+    device = "default"
+    mixer = "Master"
+    mixer_idx = 0
+    format = "🔊 %volume"
+    format_muted = "🔇"
 }
 
 order += "time"

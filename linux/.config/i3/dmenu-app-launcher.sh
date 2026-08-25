@@ -16,7 +16,7 @@ done <<< "$apps" | sort)
 selected=$(echo "$choices" | cut -d'#' -f1 | dmenu -i -l 10 -p "Run:")
 
 # Extract command
-cmd=$(echo "$choices" | grep -F "$selected###" | cut -d'#' -f2- | cut -d'#' -f2)
+cmd=$(echo "$choices" | awk -F'###' -v sel="$selected" '$1 == sel {print $2; exit}')
 
 # Run if not empty
 [[ -n "$cmd" ]] && nohup bash -c "$cmd" >/dev/null 2>&1 &
