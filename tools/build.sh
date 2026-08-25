@@ -6,8 +6,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 OUT_DIR="$SCRIPT_DIR/bin"
 mkdir -p "$OUT_DIR"
 
-RUST_TOOLS=(dupe pack netwatch tunnel)
-GO_TOOLS=(sync timeline)
+RUST_TOOLS=(dupe pack netwatch tunnel copy)
+GO_TOOLS=(timeline)
 
 built=0
 failed=0
