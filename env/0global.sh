@@ -19,7 +19,6 @@ export PATH="$PATH:$HOME_PATH_1000/.local/bin"
 export PATH="$PATH:/opt/nvim-linux64/bin"
 export PATH="$PATH:$HOME/.cargo/bin"
 export XDG_DATA_DIRS="/var/lib/flatpak/exports/share:$HOME/.local/share/flatpak/exports/share:$XDG_DATA_DIRS"
-export TERM=xterm-256color
 export MANPAGER="nvim +Man!"
 
 #Starts an http server on the current directory (Default port: 8000)
