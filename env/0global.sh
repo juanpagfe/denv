@@ -20,6 +20,7 @@ export PATH="$PATH:/opt/nvim-linux64/bin"
 export PATH="$PATH:$HOME/.cargo/bin"
 export XDG_DATA_DIRS="/var/lib/flatpak/exports/share:$HOME/.local/share/flatpak/exports/share:$XDG_DATA_DIRS"
 export MANPAGER="nvim +Man!"
+export EDITOR="nvim"
 
 #Starts an http server on the current directory (Default port: 8000)
 alias www='python3 -m http.server'
@@ -83,6 +84,15 @@ alias rovo='acli rovodev'
 #                                       GLOBAL FUNCTIONS                                      #
 #                                                                                             #
 ###############################################################################################
+
+
+function y() {
+	local tmp cwd; tmp="$(mktemp -t "yazi-cwd.XXXXXX")"
+	command yazi "$@" --cwd-file="$tmp"
+	IFS= read -r -d '' cwd < "$tmp"
+	[ "$cwd" != "$PWD" ] && [ -d "$cwd" ] && builtin cd -- "$cwd" || builtin true
+	command rm -f -- "$tmp"
+}
  
 if [ -n "$BASH_VERSION" ]; then
     bind -x '"\e[24~": fzf_history_picker'   # \e[24~ = F12
