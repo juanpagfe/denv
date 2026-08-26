@@ -6,6 +6,12 @@ general {
     color_bad = "#be2422"
 }
 
+order += "rovo"
+
+rovo {
+    cache_timeout = 5
+}
+
 order += "wireless _first_"
 wireless _first_ {
     format_up = " 📶%quality » %essid "
@@ -59,6 +65,11 @@ volume master {
     mixer_idx = 0
     format = "🔊 %volume"
     format_muted = "🔇"
+
+    on_click 1 = "exec pavucontrol"
+    on_click 2 = "exec pamixer --toggle-mute"
+    on_click 4 = "exec pamixer --increase 5"
+    on_click 5 = "exec pamixer --decrease 5"
 }
 
 order += "time"
