@@ -134,7 +134,7 @@ bindsym $mod+r mode "resize"
 # Configure i3bar with default settings.
 bar {
         position top
-        status_command py3status
+        status_command ATLASSIAN_COOKIE="REPLACE_WITH_ATLASSIAN_COOKIE" py3status
         tray_output primary
 }
 
