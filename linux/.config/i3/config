@@ -21,6 +21,7 @@ exec --no-startup-id xss-lock --transfer-sleep-lock -- i3lock -e --color 000000 
 
 # Start system tray applets and load Xresources.
 exec --no-startup-id volumeicon
+exec --no-startup-id dunst
 exec --no-startup-id xrdb -merge ~/.Xresources
 
 for_window [window_role="pop-up"] floating enable
