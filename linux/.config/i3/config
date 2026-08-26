@@ -134,7 +134,7 @@ bindsym $mod+r mode "resize"
 # Configure i3bar with default settings.
 bar {
         position top
-        status_command ATLASSIAN_COOKIE="REPLACE_WITH_ATLASSIAN_COOKIE" py3status
+        status_command sh -c 'if [ -f "$HOME/.config/py3status/modules/rovo.cfg" ]; then . "$HOME/.config/py3status/modules/rovo.cfg"; fi; exec py3status'
         tray_output primary
 }
 
