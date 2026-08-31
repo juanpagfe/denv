@@ -37,10 +37,7 @@ bindsym $mod+Return exec --no-startup-id $term
 bindsym $mod+Shift+q kill
 
 # Launch Rofi application launcher with $mod+d.
-bindsym $mod+d exec --no-startup-id rofi -show drun -show-icons -lines 5 -columns 3 -eh 2 -width 50 -padding 200 -opacity "40"
-#bindsym $mod+s exec --no-startup-id show -show run -lines 5 -columns 3 -eh 2 -width 50 -padding 200 -opacity "40"
-#bindsym $mod+d exec --no-startup-id dmenu_run -fn "Fira Code-10" -nb "#1e1e2e" -nf "#cdd6f4" -sb "#89b4fa" -sf "#1e1e2e" -l 10
-#bindsym $mod+d exec --no-startup-id ~/.config/i3/dmenu-app-launcher.sh
+bindsym $mod+d exec --no-startup-id rofi -show drun -show-icons
 bindsym $mod+s exec --no-startup-id ~/.config/i3/dmenu-pkexec.sh
 
 # Change focus between containers using $mod+h/j/k/l.
@@ -131,11 +128,28 @@ mode "resize" {
 
 bindsym $mod+r mode "resize"
 
-# Configure i3bar with default settings.
 bar {
-        position top
-        status_command sh -c 'if [ -f "$HOME/.config/py3status/modules/rovo.cfg" ]; then . "$HOME/.config/py3status/modules/rovo.cfg"; fi; exec py3status'
-        tray_output primary
+    position top
+
+    status_command sh -c 'if [ -f "$HOME/.config/py3status/modules/rovo.cfg" ]; then . "$HOME/.config/py3status/modules/rovo.cfg"; fi; exec py3status'
+
+    tray_output primary
+
+    font pango:Meslo LGM Nerd Font 9
+
+    separator_symbol "│"
+
+    colors {
+        background          #181825
+        statusline           #cdd6f4
+        separator            #6B6E8A
+
+        focused_workspace    #89b4fa #89b4fa #1e1e2e
+        active_workspace     #313244 #313244 #cdd6f4
+        inactive_workspace   #181825 #181825 #6c7086
+        urgent_workspace     #f38ba8 #f38ba8 #1e1e2e
+        binding_mode         #f9e2af #f9e2af #1e1e2e
+    }
 }
 
 exec --no-startup-id nm-applet      # Network manager tray icon

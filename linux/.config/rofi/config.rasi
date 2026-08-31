@@ -1,0 +1,81 @@
+configuration {
+    show-icons: true;
+    drun-display-format: "{name}";
+    font: "MesloLGM Nerd Font 11";
+}
+
+* {
+    background: #181825;
+    background-alt: #1e1e2e;
+    foreground: #cdd6f4;
+    selected: #89b4fa;
+    selected-foreground: #1e1e2e;
+    border-color: #313244;
+}
+
+window {
+    width: 600px;
+    border: 1px;
+    border-color: @border-color;
+    border-radius: 0px;
+    background-color: @background;
+}
+
+mainbox {
+    padding: 12px;
+    background-color: @background;
+}
+
+inputbar {
+    padding: 10px 12px;
+    background-color: @background-alt;
+}
+
+prompt {
+    background-color: @background-alt;
+    text-color: @selected;
+}
+
+entry {
+    background-color: @background-alt;
+    text-color: @foreground;
+}
+
+listview {
+    columns: 1;
+    lines: 8;
+    spacing: 2px;
+    padding: 10px 0 0;
+    background-color: @background;
+}
+
+element {
+    padding: 8px 10px;
+    background-color: @background;
+    text-color: @foreground;
+}
+
+element normal.normal {
+    background-color: @background;
+    text-color: @foreground;
+}
+
+element alternate.normal {
+    background-color: @background;
+    text-color: @foreground;
+}
+
+element selected {
+    background-color: #313244;
+    text-color: @foreground;
+}
+
+element-icon {
+    background-color: transparent;
+    size: 24px;
+}
+
+element-text {
+    background-color: transparent;
+    text-color: inherit;
+}
