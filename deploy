@@ -1,5 +1,33 @@
 #!/bin/bash
 
+USER_BIN="$HOME/.local/bin"
+SYSTEM_BIN="/usr/local/bin"
+
+SYSTEM_TOOLS=(
+    copy
+    aimgr
+    imgctl
+    port
+    proc
+    space
+    trash
+    dupe
+    netwatch
+    pack
+    tunnel
+)
+
+in_array() {
+    local value=$1
+    shift
+
+    for item; do
+        [[ "$item" == "$value" ]] && return 0
+    done
+
+    return 1
+}
+
 if [ ! -d ~/.config ]; then
     mkdir ~/.config
 fi
@@ -32,6 +60,13 @@ else
         fi
     fi
 fi
+
+for tool in ~/.local/bin/*; do
+    name=$(basename "$tool")
+    if in_array "$name" "${SYSTEM_TOOLS[@]}"; then
+        sudo cp ~/.local/bin/$name /usr/local/bin
+    fi
+done
 
 #Merge environment files
 if [ ! -f envrc ]; then
