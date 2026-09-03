@@ -14,11 +14,13 @@ configuration {
 }
 
 window {
+    location: north;
     width: 600px;
     border: 1px;
     border-color: @border-color;
     border-radius: 0px;
     background-color: @background;
+    y-offset: 25px;
 }
 
 mainbox {
