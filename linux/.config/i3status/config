@@ -16,7 +16,7 @@ rovo {
 # Network
 order += "wireless _first_"
 wireless _first_ {
-    format_up = " %quality% %essid"
+    format_up = " %quality %essid"
     format_down = ""
 }
 
