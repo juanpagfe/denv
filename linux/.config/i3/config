@@ -38,7 +38,7 @@ bindsym $mod+Shift+q kill
 
 # Launch Rofi application launcher with $mod+d.
 bindsym $mod+d exec --no-startup-id rofi -show drun -show-icons
-bindsym $mod+s exec --no-startup-id ~/.config/i3/dmenu-pkexec.sh
+bindsym $mod+s exec --no-startup-id ~/.config/i3/menu-pkexec.sh
 
 # Change focus between containers using $mod+h/j/k/l.
 bindsym $mod+h focus left

@@ -12,8 +12,6 @@ YELLOW=$'\033[33m'
 BLUE=$'\033[34m'
 NC=$'\033[0m'
 
-export GOPATH="$HOME/Develop/go"
-export PATH="$PATH:/usr/local/go/bin:$GOPATH/bin"
 export HOME_PATH_1000="$HOME"
 export PATH="$PATH:$HOME_PATH_1000/.local/bin"
 export PATH="$PATH:/opt/nvim-linux64/bin"
@@ -24,8 +22,6 @@ export EDITOR="nvim"
 
 #Starts an http server on the current directory (Default port: 8000)
 alias www='python3 -m http.server'
-
-alias lsiptables='sudo iptables -L -n -v'
 
 if [[ -n "${DISPLAY:-}" ]]; then
     setxkbmap -layout us -model pc105 -variant altgr-intl -option compose:ralt,terminate:ctrl_alt_bksp
@@ -38,30 +34,18 @@ fi
 ###############################################################################################
 
 
-alias stream-android='scrcpy'
+alias g='git status'
 
 alias ls='ls --color=auto'
 
 #Clear terminal and change directory to home
 alias c='clear'
 
-#Creates a file
-alias t='touch'
-
 #Close terminal
 alias e='exit'
 
-#History+grep shortcut
-alias hs='history | grep'
-
 # Smart ls alias
-alias l='ls -lah'
-
-# Make and change directory at once
-mkcd() { mkdir -p "$1" && cd "$1"; }
-
-# fast find
-ff() { find . -name "$1"; }
+alias l='ls -lah --color=auto'
 
 # System
 alias reboot='sudo /sbin/reboot'
@@ -84,15 +68,6 @@ alias rovo='acli rovodev'
 #                                       GLOBAL FUNCTIONS                                      #
 #                                                                                             #
 ###############################################################################################
-
-
-function y() {
-	local tmp cwd; tmp="$(mktemp -t "yazi-cwd.XXXXXX")"
-	command yazi "$@" --cwd-file="$tmp"
-	IFS= read -r -d '' cwd < "$tmp"
-	[ "$cwd" != "$PWD" ] && [ -d "$cwd" ] && builtin cd -- "$cwd" || builtin true
-	command rm -f -- "$tmp"
-}
  
 if [ -n "$BASH_VERSION" ]; then
     bind -x '"\e[24~": fzf_history_picker'   # \e[24~ = F12
@@ -122,115 +97,48 @@ function fzf_history_picker() {
     fi
 }
 
-#Create file with random base64 content
-function crfile() {
-  wanted_size=$(dehumanize "$2")
-  file_size=$((((wanted_size/12)+1)*12 ))
-  read_size=$((file_size*3/4))
-  dd if=/dev/urandom bs="$read_size" count=1 2>/dev/null | base64 > "$1"
-  truncate -s "$wanted_size" "$1"
-}
-
+# Reloads shell
 function rt() {
   exec "$SHELL" -l
 }
 
-#Setup home xrandr environment (requires i3)
-function sethome() {
-    if ! pgrep -x "i3" > /dev/null; then
-        echo "i3 is not running"
-        return 1
-    fi
-    xrandr --output eDP-1-1 --mode 3072x1920 --scale 0.7x0.7 --pos 1920x0 --rotate normal --output HDMI-1-1 --primary --mode 1920x1080 --pos 0x0 --rotate normal
-}
-
-#Setup alone xrandr environment (requires i3)
-function setalone() {
-    if ! pgrep -x "i3" > /dev/null; then
-        echo "i3 is not running"
-        return 1
-    fi
-    xrandr --output eDP-1-1 --mode 3072x1920 --scale 0.7x0.7 --pos 0x0 --rotate normal --output HDMI-1-1 --off --output DP-1 --off
-}
-
 # Display environment configuration files
-function catenv() {
-  if [ -z "$1" ]; then
-    cat /etc/envrc
-  else
-    acat=$(alias | grep "$1")
-    if [ -z "$acat" ]; then
-      fcat=$(declare -f "$1")
-      if [ -z "$fcat" ]; then
-        if [ -f "$HOME_PATH_1000/.local/bin/$1" ]; then
-            echo "${GREEN}Executable File${NC}"
-            cat "$HOME_PATH_1000/.local/bin/$1"
-        else
-            echo "${GREEN}Not an alias nor a function. Regex search:${NC}"
-            grep "$1" /etc/envrc
-        fi
-      else
+catenv() {
+    local name=${1:-}
+
+    if [[ -z $name ]]; then
+        name=$(
+            {
+                compgen -a | awk '{print "Alias\t" $0}'
+                compgen -A function | awk '{print "Function\t" $0}'
+                find "$HOME_PATH_1000/.local/bin" -maxdepth 1 -type f \
+                    -printf 'Executable\t%f\n'
+            } |
+            sort -t$'\t' -k2,2 |
+            fzf \
+                --height=40% \
+                --reverse \
+                --delimiter=$'\t' \
+                --with-nth=2 \
+                --prompt='catenv> ' |
+            cut -f2
+        )
+
+        [[ -z $name ]] && return
+    fi
+
+    if alias "$name" &>/dev/null; then
+        echo "${GREEN}Alias${NC}"
+        alias "$name"
+    elif declare -f "$name" &>/dev/null; then
         echo "${GREEN}Function${NC}"
-        echo "$fcat"
-      fi
+        declare -f "$name"
+    elif [[ -f "$HOME_PATH_1000/.local/bin/$name" ]]; then
+        echo "${GREEN}Executable File${NC}"
+        cat "$HOME_PATH_1000/.local/bin/$name"
     else
-      echo "${GREEN}Alias${NC}"
-      echo "$acat"
+        echo "${GREEN}Not an alias nor a function. Regex search:${NC}"
+        grep "$name" /etc/envrc
     fi
-  fi
-}
-
-function uploadenv() {
-  host="$1"
-  name="${1%@*}"
-  if [ -z "$host" ]; then
-    echo "You need to specify the host (eg. pi@pi0.local)"
-    return
-  fi
-
-  if [ -z "$name" ]; then
-    echo "You need to specify the username (eg. pi@pi0.local. It can't be root)"
-    return
-  fi
-
-  if [ "$name" = "root" ]; then
-    echo "You need to specify the username (eg. pi@pi0.local. It can't be root)"
-    return
-  fi
-
-  scp /etc/envrc "$host:/home/$name"
-  ssh "$host" -T <<ENDSSH
-      sudo mv ~/envrc /etc/envrc
-      . /etc/envrc
-      updatenv
-ENDSSH
-  echo "Environment shared and updated in $host"
-}
-
-function updatenv(){
-  ENVRC_TEXT=". /etc/envrc"
-  if ! grep -qF "$ENVRC_TEXT" ~/.bashrc 2>/dev/null; then
-    echo "$ENVRC_TEXT" | sudo tee -a ~/.bashrc
-  fi
-
-  if [ -f ~/.zshrc ]; then
-      if ! grep -qF "$ENVRC_TEXT" ~/.zshrc 2>/dev/null; then
-          echo "$ENVRC_TEXT" | sudo tee -a ~/.zshrc
-      fi
-  fi
-
-  if sudo test -f /root/.bashrc; then
-    if ! sudo grep -qF "$ENVRC_TEXT" /root/.bashrc 2>/dev/null; then
-      echo "$ENVRC_TEXT" | sudo tee -a /root/.bashrc
-    fi
-  fi
-
-  if sudo test -f /root/.zshrc; then
-    if ! sudo grep -qF "$ENVRC_TEXT" /root/.zshrc 2>/dev/null; then
-        echo "$ENVRC_TEXT" | sudo tee -a /root/.zshrc
-    fi
-  fi
-
-  . /etc/envrc
 }
 
