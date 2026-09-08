@@ -35,6 +35,8 @@ fi
 
 
 alias g='git status'
+alias gaa='git add --all'
+alias gcm='git commit -m'
 
 alias ls='ls --color=auto'
 
