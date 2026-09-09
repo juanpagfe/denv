@@ -1,6 +1,7 @@
 # See dunst(5) for all configuration options
 
 [global]
+    script = ~/.config/dunst/dunst-debug.sh
     ### Display ###
 
     # Which monitor should the notifications be displayed on.
@@ -327,6 +328,11 @@
     foreground = "#ffffff"
     frame_color = "#d44"
     timeout = 0
+
+
+[zen-browser]
+    desktop_entry = "app.zen_browser.zen"
+    script = ~/.config/dunst/urgent-notification.sh
 
 # Every section that isn't one of the above is interpreted as a rules to
 # override settings for certain messages.
