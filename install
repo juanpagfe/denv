@@ -8,7 +8,7 @@ if command -v apt-get >/dev/null; then
         policykit-1-gnome make gcc build-essential wkhtmltopdf \
         unclutter-xfixes bear vim tmux ruby-dev stow feh pulseaudio-utils \
         fd-find catimg meld coreutils openssl dunst libnotify-bin pavucontrol \
-        wmctrl py3status pamixer
+        wmctrl py3status pamixer bat
 
     # Rust
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
