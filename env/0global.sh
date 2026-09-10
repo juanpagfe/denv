@@ -33,7 +33,7 @@ fi
 #                                                                                             #
 ###############################################################################################
 
-
+alias cat='batcat'
 alias g='git status'
 alias gaa='git add --all'
 alias gcm='git commit -m'
